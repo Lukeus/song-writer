@@ -1,0 +1,15 @@
+#!/bin/sh
+# Placeholder for the lyric-transcriber sidecar.
+#
+# Debug builds never run this file — the app invokes `analyzer/transcribe.py`
+# with the project venv's python3 (see src-tauri/src/utilities/audio.rs). Tauri's
+# build step only requires the externalBin file to *exist*, so this stand-in
+# keeps `pnpm tauri dev` building.
+#
+# For a RELEASE build, replace this with a self-contained PyInstaller binary:
+#   cd analyzer && source .venv/bin/activate
+#   pyinstaller --onefile transcribe.py
+#   TRIPLE=$(rustc -Vv | sed -n 's/host: //p')
+#   cp dist/transcribe ../src-tauri/binaries/transcriber-$TRIPLE
+echo '{"error":"transcriber sidecar not built — see analyzer/README.md"}'
+exit 1

@@ -1,0 +1,619 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Song Writer — Lukeus Design System
+   Dark ink canvas, cyan/peach/mint accents, Space Grotesk + Manrope + Source Code Pro
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+
+:root {
+  --lk-ink: #0B0F14;
+  --lk-surface-1: #121922;
+  --lk-surface-2: #1A232E;
+  --lk-line: #243140;
+  --lk-cyan: #7CD2FF;
+  --lk-cyan-hover: #a4e0ff;
+  --lk-cyan-muted: rgba(124, 210, 255, 0.10);
+  --lk-cyan-border: rgba(124, 210, 255, 0.35);
+  --lk-peach: #FFBB7C;
+  --lk-peach-muted: rgba(255, 187, 124, 0.14);
+  --lk-mint: #A3FFB0;
+  --lk-mint-border: rgba(163, 255, 176, 0.35);
+  --lk-text: #EEF2F6;
+  --lk-text-secondary: #90A0B0;
+  --lk-text-muted: #5C6A78;
+
+  /* Legacy aliases so nothing breaks */
+  --border: var(--lk-line);
+  --muted: var(--lk-text-muted);
+  --accent: var(--lk-cyan);
+  --accent-hover: var(--lk-cyan-hover);
+  --bg: var(--lk-ink);
+  --bg-alt: var(--lk-surface-1);
+
+  font-family: "Manrope", sans-serif;
+  color: var(--lk-text);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; background: var(--lk-ink); }
+
+/* ─── Top-level shell ───────────────────────────────────────────────────── */
+.app-shell {
+  display: flex; flex-direction: column; height: 100vh;
+  background: var(--lk-ink);
+}
+
+.app-nav {
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 20px; height: 52px;
+  border-bottom: 1px solid var(--lk-line);
+  background: rgba(11, 15, 20, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Drag region for Tauri title bar */
+.app-nav::before {
+  content: "[ song writer ]";
+  font: 500 14px "Source Code Pro", monospace;
+  color: var(--lk-text);
+  letter-spacing: 0.04em;
+  margin-right: 16px;
+  flex: none;
+}
+
+.nav-tab {
+  border: none; background: transparent; cursor: pointer;
+  padding: 6px 12px; border-radius: 999px;
+  font: 500 12px "Source Code Pro", monospace;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--lk-text-secondary);
+  transition: color 0.18s ease-out, background 0.18s ease-out;
+}
+.nav-tab:hover { color: var(--lk-text); }
+.nav-tab.active {
+  background: var(--lk-cyan);
+  color: var(--lk-ink);
+}
+
+/* ─── Songs view: three-pane workspace ──────────────────────────────────── */
+.app {
+  display: grid;
+  grid-template-columns: 248px 1fr 312px;
+  flex: 1; min-height: 0;
+  background: var(--lk-ink);
+}
+
+/* ─── Sidebar (song list) ───────────────────────────────────────────────── */
+.sidebar {
+  border-right: 1px solid var(--lk-line);
+  background: var(--lk-ink);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px 10px;
+}
+.sidebar-header h1 {
+  font: 500 12px "Source Code Pro", monospace;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--lk-text-muted);
+  margin: 0;
+}
+.sidebar-header button {
+  border: none; border-radius: 4px;
+  background: var(--lk-cyan);
+  color: var(--lk-ink);
+  padding: 6px 12px; cursor: pointer;
+  font: 600 13px "Manrope", sans-serif;
+  transition: background 0.18s ease-out;
+}
+.sidebar-header button:hover { background: var(--lk-cyan-hover); }
+
+.song-list {
+  list-style: none; margin: 0; padding: 2px 8px;
+  overflow-y: auto; flex: 1;
+}
+
+.song-item {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px; border-radius: 8px;
+  cursor: pointer; font: 600 14px "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+  transition: background 0.18s ease-out, color 0.18s ease-out;
+}
+.song-item:hover { background: var(--lk-surface-2); color: var(--lk-text); }
+.song-item.active {
+  background: var(--lk-surface-2);
+  border: 1px solid var(--lk-line);
+  color: var(--lk-text);
+}
+
+.song-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.song-delete {
+  border: none; background: transparent; cursor: pointer;
+  font-size: 18px; line-height: 1; color: inherit; opacity: 0.4;
+}
+.song-delete:hover { opacity: 1; }
+
+.song-empty {
+  padding: 12px 10px;
+  font: 400 13px "Manrope", sans-serif;
+  color: var(--lk-text-muted);
+}
+
+/* ─── Editor pane ───────────────────────────────────────────────────────── */
+.editor-pane {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--lk-ink);
+}
+
+.editor-titlebar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 24px 40px 0;
+}
+.title-input {
+  flex: 1; border: none; outline: none;
+  font: 500 31px/1.2 "Space Grotesk", sans-serif;
+  letter-spacing: -0.01em;
+  color: var(--lk-text);
+  background: transparent;
+}
+.title-input::placeholder { color: var(--lk-text-muted); }
+
+.save-status {
+  font: 400 12px "Source Code Pro", monospace;
+  letter-spacing: 0.06em;
+  color: var(--lk-text-muted);
+}
+
+.editor-empty {
+  margin: auto;
+  font: 400 14px "Manrope", sans-serif;
+  color: var(--lk-text-muted);
+}
+
+/* ─── Projects / Utilities pane ─────────────────────────────────────────── */
+.projects-pane {
+  border-left: 1px solid var(--lk-line);
+  background: var(--lk-ink);
+  overflow-y: auto;
+}
+
+/* ─── Dashboard ─────────────────────────────────────────────────────────── */
+.dashboard {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 28px 32px;
+}
+.dashboard h2 {
+  font: 500 12px "Source Code Pro", monospace;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--lk-text-muted);
+  margin: 0 0 18px;
+}
+
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px; max-width: 760px;
+}
+
+.stat-card {
+  border: 1px solid var(--lk-line); border-radius: 12px;
+  background: var(--lk-surface-1);
+  padding: 16px;
+  transition: background 0.18s ease-out, transform 0.18s ease-out;
+}
+.stat-card:hover {
+  background: var(--lk-surface-2);
+  transform: translateY(-1px);
+}
+.stat-card:active { transform: translateY(0); }
+
+.stat-value {
+  font: 700 28px "Space Grotesk", sans-serif;
+  color: var(--lk-text);
+  line-height: 1.1;
+}
+.stat-label {
+  font: 400 12px "Source Code Pro", monospace;
+  letter-spacing: 0.04em;
+  color: var(--lk-text-muted);
+  margin-top: 4px;
+}
+
+/* ─── Utilities pane (tabbed host) ──────────────────────────────────────── */
+.utilities-pane {
+  display: flex; flex-direction: column; min-height: 100%;
+}
+
+.utilities-tabs {
+  display: flex; gap: 2px; padding: 10px 12px 0;
+  border-bottom: 1px solid var(--lk-line);
+  position: sticky; top: 0;
+  background: var(--lk-ink);
+  z-index: 1;
+}
+
+.utility-tab {
+  border: none; background: transparent; cursor: pointer;
+  padding: 8px 12px;
+  font: 500 11px "Source Code Pro", monospace;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--lk-text-muted);
+  border-bottom: 2px solid transparent;
+  transition: color 0.18s ease-out;
+}
+.utility-tab:hover { color: var(--lk-text-secondary); }
+.utility-tab.active {
+  color: var(--lk-cyan);
+  border-bottom-color: var(--lk-cyan);
+}
+
+.utilities-body { flex: 1; }
+
+/* ─── Logic Projects panel ──────────────────────────────────────────────── */
+.logic-panel { padding: 14px; }
+
+.logic-panel-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+}
+.logic-panel-header h2 {
+  font: 500 12px "Source Code Pro", monospace;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--lk-text-muted);
+  margin: 0;
+}
+.logic-panel-header button {
+  border: 1px solid var(--lk-line); background: transparent;
+  border-radius: 4px; padding: 6px 12px; cursor: pointer;
+  font: 500 13px "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+  transition: border-color 0.18s ease-out, color 0.18s ease-out;
+}
+.logic-panel-header button:hover {
+  border-color: var(--lk-cyan); color: var(--lk-cyan);
+}
+.logic-panel-header button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.logic-empty, .logic-error {
+  font: 400 13px "Manrope", sans-serif;
+  color: var(--lk-text-muted);
+}
+.logic-error { color: var(--lk-peach); }
+
+.logic-list {
+  list-style: none; margin: 12px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.logic-item {
+  border: 1px solid var(--lk-line); border-radius: 8px;
+  padding: 10px; background: var(--lk-surface-1);
+  transition: background 0.18s ease-out, transform 0.18s ease-out;
+}
+.logic-item:hover {
+  background: var(--lk-surface-2);
+  transform: translateY(-1px);
+}
+.logic-item.linked {
+  border-color: var(--lk-mint);
+  box-shadow: 0 0 0 1px var(--lk-mint) inset;
+}
+
+.logic-item-main {
+  display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px;
+}
+.logic-name {
+  font: 600 14px "Manrope", sans-serif;
+  color: var(--lk-text);
+}
+.logic-meta {
+  font: 400 11px "Source Code Pro", monospace;
+  letter-spacing: 0.04em;
+  color: var(--lk-text-muted);
+}
+.logic-path {
+  font: 400 11px "Source Code Pro", monospace;
+  color: var(--lk-text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.logic-item-actions { display: flex; gap: 6px; }
+.logic-item-actions button {
+  border: 1px solid var(--lk-line); background: transparent;
+  border-radius: 4px; padding: 6px 12px; cursor: pointer;
+  font: 500 12px "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+  transition: border-color 0.18s ease-out, color 0.18s ease-out;
+}
+.logic-item-actions button:hover {
+  border-color: var(--lk-cyan); color: var(--lk-cyan);
+}
+.logic-item-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ─── Audio analysis panel ──────────────────────────────────────────────── */
+.audio-panel { padding: 14px; }
+
+.audio-panel-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+}
+.audio-panel-header h2 {
+  font: 500 12px "Source Code Pro", monospace;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--lk-text-muted);
+  margin: 0;
+}
+.audio-panel-header button {
+  border: none; border-radius: 4px;
+  background: var(--lk-cyan);
+  color: var(--lk-ink);
+  padding: 6px 12px; cursor: pointer;
+  font: 600 12px "Manrope", sans-serif;
+  transition: background 0.18s ease-out;
+}
+.audio-panel-header button:hover { background: var(--lk-cyan-hover); }
+.audio-panel-header button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.audio-dropzone {
+  margin: 12px 0; padding: 18px 12px;
+  border: 1.5px dashed var(--lk-line);
+  border-radius: 12px; text-align: center;
+  font: 400 12px "Manrope", sans-serif;
+  color: var(--lk-text-muted);
+  transition: border-color 0.18s ease-out, background 0.18s ease-out;
+}
+.audio-dropzone.dragging {
+  border-color: var(--lk-peach);
+  background: var(--lk-peach-muted);
+  color: var(--lk-peach);
+}
+.audio-dropzone.disabled { opacity: 0.5; }
+
+.audio-empty {
+  font: 400 13px "Manrope", sans-serif;
+  color: var(--lk-text-muted);
+}
+.audio-error {
+  font: 400 13px "Manrope", sans-serif;
+  color: var(--lk-peach);
+}
+
+.audio-list {
+  list-style: none; margin: 12px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.audio-item {
+  border: 1px solid var(--lk-line); border-radius: 12px;
+  padding: 14px; background: var(--lk-surface-1);
+}
+
+.audio-item-main {
+  display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px;
+}
+.audio-name {
+  font: 600 13px "Manrope", sans-serif;
+  color: var(--lk-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.audio-meta {
+  font: 400 10.5px "Source Code Pro", monospace;
+  letter-spacing: 0.04em;
+  color: var(--lk-text-muted);
+}
+.audio-item-error {
+  font: 400 11px "Source Code Pro", monospace;
+  color: var(--lk-peach);
+}
+
+/* ─── Inline audio player (play + waveform + transport time) ─────────────── */
+.audio-player {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+
+.audio-play {
+  flex: none;
+  width: 30px; height: 30px; padding: 0;
+  border-radius: 999px;
+  display: grid; place-items: center;
+  border: 1px solid var(--lk-peach);
+  background: var(--lk-peach-muted);
+  color: var(--lk-peach);
+  cursor: pointer;
+  font: 500 11px "Source Code Pro", monospace;
+  letter-spacing: 0.06em;
+  transition: background 0.18s ease-out, transform 0.12s ease-out;
+}
+.audio-play:hover { background: rgba(255, 187, 124, 0.26); }
+.audio-play:active { transform: scale(0.94); }
+.audio-play.playing { background: var(--lk-peach); color: var(--lk-ink); }
+.audio-play:disabled {
+  opacity: 0.4; cursor: not-allowed;
+  border-color: var(--lk-line); color: var(--lk-text-muted);
+  background: transparent;
+}
+
+.audio-wave {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 2px;
+  height: 34px; cursor: pointer;
+}
+.wave-bar {
+  flex: 1; min-width: 0;
+  min-height: 2px;
+  background: #3a4a5c;
+  border-radius: 1px;
+  transition: background 0.1s linear;
+}
+.wave-bar.played { background: var(--lk-peach); }
+
+.audio-time {
+  flex: none;
+  font: 400 10.5px "Source Code Pro", monospace;
+  letter-spacing: 0.04em;
+  color: var(--lk-text-muted);
+  min-width: 78px; text-align: right;
+}
+
+.audio-status {
+  text-transform: uppercase; font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.status-running { color: var(--lk-cyan); }
+.status-done { color: var(--lk-mint); }
+.status-error { color: var(--lk-peach); }
+.status-pending { color: var(--lk-text-muted); }
+
+.audio-item-actions {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.audio-item-actions button {
+  border: 1px solid var(--lk-line); background: transparent;
+  border-radius: 4px; padding: 5px 10px; cursor: pointer;
+  font: 500 12px "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+  transition: border-color 0.18s ease-out, color 0.18s ease-out;
+}
+.audio-item-actions button:hover {
+  border-color: var(--lk-cyan); color: var(--lk-cyan);
+}
+.audio-item-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.audio-item-actions button.active {
+  border-color: var(--lk-peach); color: var(--lk-peach);
+}
+
+.audio-chords {
+  list-style: none; margin: 10px 0 0; padding: 8px;
+  background: var(--lk-surface-2); border: 1px solid var(--lk-line);
+  border-radius: 8px;
+  display: flex; flex-wrap: wrap; gap: 8px;
+  max-height: 160px; overflow-y: auto;
+}
+.audio-chords li {
+  display: flex; flex-direction: column; align-items: center; min-width: 42px;
+}
+.audio-chords .chord-time {
+  font: 400 10px "Source Code Pro", monospace;
+  color: var(--lk-text-muted);
+}
+.audio-chords .chord-label {
+  font: 700 13px "Source Code Pro", monospace;
+  color: var(--lk-cyan);
+}
+
+/* ─── Transcribed lyrics ────────────────────────────────────────────────── */
+.audio-lyrics {
+  margin-top: 10px; padding: 8px;
+  background: var(--lk-surface-2); border: 1px solid var(--lk-line);
+  border-radius: 8px;
+}
+.audio-lyrics-status {
+  font: 400 12px "Source Code Pro", monospace;
+  color: var(--lk-text-muted); margin: 0;
+}
+.audio-lyrics-actions {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.audio-lyrics-lang {
+  font: 400 10px "Source Code Pro", monospace;
+  color: var(--lk-text-muted); text-transform: uppercase;
+}
+.audio-lyrics-text {
+  margin: 0; max-height: 220px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-word;
+  font: 400 13px/1.5 "Source Code Pro", monospace;
+  color: var(--lk-text);
+}
+
+/* ─── Mastering section ─────────────────────────────────────────────────── */
+.mastering {
+  margin-top: 10px; padding: 14px;
+  background: var(--lk-surface-2); border: 1px solid var(--lk-line);
+  border-radius: 12px;
+}
+.mastering-status {
+  font: 400 12px "Source Code Pro", monospace;
+  color: var(--lk-text-muted);
+  margin: 0;
+}
+
+.mastering-metrics {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 6px; margin-bottom: 8px;
+}
+.mastering-metric {
+  background: var(--lk-ink); border: 1px solid var(--lk-line);
+  border-radius: 6px; padding: 6px; text-align: center;
+}
+.mm-value {
+  font: 700 14px "Source Code Pro", monospace;
+  color: var(--lk-mint);
+}
+.mm-label {
+  font: 400 11px "Source Code Pro", monospace;
+  color: var(--lk-text-secondary);
+  margin-top: 2px;
+}
+.mm-sub {
+  font: 400 10px "Source Code Pro", monospace;
+  color: var(--lk-text-muted);
+}
+
+.mastering-recs {
+  margin: 0 0 10px; padding-left: 16px;
+  font: 400 12px/1.6 "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+}
+.mastering-recs li { margin: 3px 0; }
+
+.mastering-controls {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.mastering-target {
+  font: 400 12px "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+  display: flex; align-items: center; gap: 6px;
+}
+.mastering-target select {
+  font: 400 12px "Source Code Pro", monospace;
+  padding: 4px 6px;
+  background: var(--lk-ink); color: var(--lk-text);
+  border: 1px solid var(--lk-line); border-radius: 4px;
+}
+
+.mastering-tonal {
+  font: 400 12px "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+  display: flex; align-items: center; gap: 4px;
+}
+.mastering-tonal input[type="checkbox"] {
+  accent-color: var(--lk-cyan);
+}
+
+.mastering-controls button {
+  border: none; border-radius: 4px;
+  background: var(--lk-cyan);
+  color: var(--lk-ink);
+  padding: 7px 14px; cursor: pointer;
+  font: 600 12px "Manrope", sans-serif;
+  transition: background 0.18s ease-out;
+}
+.mastering-controls button:hover { background: var(--lk-cyan-hover); }
+.mastering-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.mastering-done {
+  font: 500 12px "Source Code Pro", monospace;
+  color: var(--lk-mint);
+  margin: 8px 0 0;
+}

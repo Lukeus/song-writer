@@ -1,0 +1,16 @@
+#!/bin/sh
+# Placeholder for the audio-analyzer sidecar.
+#
+# Debug builds never run this file — the app invokes `analyzer/analyze.py` with
+# the project venv's python3 (see src-tauri/src/utilities/audio.rs). Tauri's
+# build step only requires the externalBin file to *exist*, so this stand-in
+# keeps `pnpm tauri dev` building.
+#
+# The real binary is ~77 MB of PyInstaller output, so it is deliberately not
+# committed. For a RELEASE build, replace this with a self-contained binary:
+#   source venv/bin/activate
+#   pyinstaller --onefile analyzer/analyze.py --name analyze
+#   TRIPLE=$(rustc -Vv | sed -n 's/host: //p')
+#   cp dist/analyze src-tauri/binaries/analyzer-$TRIPLE
+echo '{"error":"analyzer sidecar not built — see analyzer/README.md"}'
+exit 1
