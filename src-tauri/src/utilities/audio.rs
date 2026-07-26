@@ -147,6 +147,7 @@ pub async fn transcribe_media(
     app: AppHandle,
     db: State<'_, Db>,
     media_file_id: i64,
+    isolate_vocals: bool,
 ) -> Result<MediaFile, String> {
     let path = {
         let conn = db.0.lock().map_err(|e| e.to_string())?;
@@ -165,7 +166,7 @@ pub async fn transcribe_media(
         );
     }
 
-    let outcome = run_transcriber(&app, &path).await;
+    let outcome = run_transcriber(&app, &path, isolate_vocals).await;
 
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     match outcome {
@@ -191,8 +192,19 @@ pub async fn transcribe_media(
 }
 
 /// Invoke the transcriber for `path`, returning its parsed JSON output.
-async fn run_transcriber(app: &AppHandle, path: &str) -> Result<TranscriberOutput, String> {
-    let (stdout, stderr, code) = run_sidecar(app, "transcribe.py", "transcriber", &[path]).await?;
+///
+/// When `isolate_vocals` is set, the sidecar runs Demucs to separate the mix and
+/// transcribes only the vocals stem (slower, but more accurate on full mixes).
+async fn run_transcriber(
+    app: &AppHandle,
+    path: &str,
+    isolate_vocals: bool,
+) -> Result<TranscriberOutput, String> {
+    let mut args = vec![path];
+    if isolate_vocals {
+        args.push("--isolate");
+    }
+    let (stdout, stderr, code) = run_sidecar(app, "transcribe.py", "transcriber", &args).await?;
     if let Ok(parsed) = serde_json::from_str::<TranscriberOutput>(stdout.trim()) {
         return Ok(parsed);
     }

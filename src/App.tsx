@@ -3,6 +3,7 @@ import type { JSONContent } from "@tiptap/react";
 import { ChordEditor } from "./editor/ChordEditor";
 import { UtilitiesPane } from "./components/UtilitiesPane";
 import { Dashboard } from "./components/Dashboard";
+import { PaneResizer, usePaneWidth } from "./components/PaneResizer";
 import {
   createSong,
   deleteSong,
@@ -13,6 +14,10 @@ import {
 import "./App.css";
 
 const EMPTY_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
+
+/** Default widths of the side panes, and how far they may be dragged. */
+const SIDEBAR = { default: 248, min: 176, max: 460 };
+const UTILITIES = { default: 312, min: 240, max: 620 };
 
 function parseDoc(json: string): JSONContent {
   if (!json) return EMPTY_DOC;
@@ -30,6 +35,11 @@ export default function App() {
   const [doc, setDoc] = useState<JSONContent>(EMPTY_DOC);
   const [saving, setSaving] = useState(false);
   const [view, setView] = useState<"songs" | "dashboard">("songs");
+  const [sidebarWidth, setSidebarWidth] = usePaneWidth("sw.pane.sidebar", SIDEBAR.default);
+  const [utilitiesWidth, setUtilitiesWidth] = usePaneWidth(
+    "sw.pane.utilities",
+    UTILITIES.default,
+  );
 
   const active = songs.find((s) => s.id === activeId) ?? null;
   const saveTimer = useRef<number | null>(null);
@@ -97,26 +107,42 @@ export default function App() {
   const onSongChanged = (updated: Song) =>
     setSongs((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
 
-  // Append transcribed lyrics into the editor: one paragraph per line. If the
-  // doc is still empty (a single blank paragraph), replace it rather than
-  // leaving a leading blank line. The ChordEditor re-syncs on `doc` changes.
-  const insertLyrics = (text: string) => {
-    if (activeId == null || !text.trim()) return;
-    const paras: JSONContent[] = text.split("\n").map((line) =>
-      line.trim()
-        ? { type: "paragraph", content: [{ type: "text", text: line }] }
-        : { type: "paragraph" },
-    );
+  // Append blocks to the editor. If the doc is still empty (a single blank
+  // paragraph), replace it rather than leaving a leading blank line. The
+  // ChordEditor re-syncs on `doc` changes.
+  const insertBlocks = (blocks: JSONContent[]) => {
+    if (activeId == null || blocks.length === 0) return;
     const prevContent = Array.isArray(doc.content) ? doc.content : [];
     const docIsEmpty =
       prevContent.length === 0 ||
       (prevContent.length === 1 && !prevContent[0].content);
     const next: JSONContent = {
       type: "doc",
-      content: [...(docIsEmpty ? [] : prevContent), ...paras],
+      content: [...(docIsEmpty ? [] : prevContent), ...blocks],
     };
     setDoc(next);
     scheduleSave(title, next);
+  };
+
+  // Swap the whole body — used when a utility rewrites the song (e.g. the
+  // agent adding chords over existing lyrics). Callers confirm first.
+  const replaceBlocks = (blocks: JSONContent[]) => {
+    if (activeId == null || blocks.length === 0) return;
+    const next: JSONContent = { type: "doc", content: blocks };
+    setDoc(next);
+    scheduleSave(title, next);
+  };
+
+  // Append plain transcribed lyrics: one paragraph per line.
+  const insertLyrics = (text: string) => {
+    if (!text.trim()) return;
+    insertBlocks(
+      text.split("\n").map((line) =>
+        line.trim()
+          ? { type: "paragraph", content: [{ type: "text", text: line }] }
+          : { type: "paragraph" },
+      ),
+    );
   };
 
   return (
@@ -139,7 +165,12 @@ export default function App() {
       {view === "dashboard" ? (
         <Dashboard songs={songs} />
       ) : (
-        <div className="app">
+        <div
+          className="app"
+          style={{
+            gridTemplateColumns: `${sidebarWidth}px auto minmax(0, 1fr) auto ${utilitiesWidth}px`,
+          }}
+        >
           <aside className="sidebar">
             <div className="sidebar-header">
               <h1>Songs</h1>
@@ -169,6 +200,16 @@ export default function App() {
             </ul>
           </aside>
 
+          <PaneResizer
+            width={sidebarWidth}
+            onChange={setSidebarWidth}
+            side="left"
+            min={SIDEBAR.min}
+            max={SIDEBAR.max}
+            defaultWidth={SIDEBAR.default}
+            label="Resize song list"
+          />
+
           <main className="editor-pane">
             {active ? (
               <>
@@ -188,6 +229,16 @@ export default function App() {
             )}
           </main>
 
+          <PaneResizer
+            width={utilitiesWidth}
+            onChange={setUtilitiesWidth}
+            side="right"
+            min={UTILITIES.min}
+            max={UTILITIES.max}
+            defaultWidth={UTILITIES.default}
+            label="Resize utilities pane"
+          />
+
           <aside className="projects-pane">
             <UtilitiesPane
               ctx={{
@@ -195,6 +246,8 @@ export default function App() {
                 activeSong: active,
                 onSongChanged,
                 insertLyrics,
+                insertBlocks,
+                replaceBlocks,
               }}
             />
           </aside>

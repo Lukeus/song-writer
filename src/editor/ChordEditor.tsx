@@ -150,7 +150,7 @@ export function ChordEditor({ content, onChange }: ChordEditorProps) {
         </div>
       )}
 
-      <EditorContent editor={editor} />
+      <EditorContent editor={editor} className="chord-editor-scroll" />
     </div>
   );
 }

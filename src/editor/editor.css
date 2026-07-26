@@ -5,7 +5,8 @@
 .chord-editor {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ─── Toolbar ───────────────────────────────────────────────────────────── */
@@ -116,9 +117,16 @@
 }
 
 /* ─── Editing surface ───────────────────────────────────────────────────── */
-.chord-editor-content {
+/* EditorContent renders a wrapper <div> around the ProseMirror element; the
+   wrapper is the flex child that must own the bounded height + scroll. */
+.chord-editor-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+}
+
+.chord-editor-content {
+  min-height: 100%;
   padding: 20px 40px;
   outline: none;
   font-family: "Source Code Pro", monospace;
@@ -127,9 +135,12 @@
   caret-color: var(--lk-cyan, #7CD2FF);
 }
 
+/* The line box has to carry the lyric *and* the chord label floating above it,
+   so the leading is the chord row's headroom. Kept generous because a line
+   densely chorded by the agent needs the label to clear the ascenders below. */
 .chord-editor-content p {
-  margin: 0 0 0.2em;
-  line-height: 3;
+  margin: 0 0 0.45em;
+  line-height: 3.4;
 }
 
 /* ─── The chord node ────────────────────────────────────────────────────── */
@@ -142,13 +153,20 @@
 
 .chord .chord-label {
   position: absolute;
-  bottom: 1.05em;
+  bottom: 1.4em;
   left: 0;
   white-space: nowrap;
   font: 600 12px "Source Code Pro", monospace;
   color: var(--lk-cyan, #7CD2FF);
   user-select: none;
   pointer-events: none;
+  /* The anchor is zero-width, so two chords over adjacent syllables can still
+     overlap. A halo in the canvas colour keeps the front label legible when
+     they do, instead of letting the two smear together. */
+  text-shadow:
+    0 0 4px var(--lk-ink, #0B0F14),
+    0 0 3px var(--lk-ink, #0B0F14),
+    0 0 2px var(--lk-ink, #0B0F14);
 }
 
 .chord.ProseMirror-selectednode .chord-label {

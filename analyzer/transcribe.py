@@ -49,23 +49,47 @@ def isolate_vocals(path: str, out_dir: str) -> str:
 
     Returns the path to the written vocals WAV. Raises on any failure so the
     caller can report it (isolation was explicitly requested).
+
+    Uses Demucs's lower-level API (`get_model` / `apply_model`) rather than
+    `demucs.api`, which is not present in the released 4.0.1 PyPI wheel. The
+    normalization mirrors `demucs.separate` so results match the CLI.
     """
     try:
-        from demucs.api import Separator, save_audio
+        import numpy as np
+        import soundfile as sf
+        import torch
+        from demucs.apply import apply_model
+        from demucs.audio import AudioFile
+        from demucs.pretrained import get_model
     except ImportError as e:
         raise RuntimeError(
             f"vocal isolation needs Demucs ({e}). Run: pip install -r requirements.txt"
         )
 
-    # Demucs runs on CPU by default; it is slow but needs no GPU.
-    separator = Separator(model=DEMUCS_MODEL)
-    _origin, stems = separator.separate_audio_file(path)
-    vocals = stems.get("vocals")
-    if vocals is None:
-        raise RuntimeError("Demucs produced no 'vocals' stem")
+    # Demucs runs on CPU here; it is slow but needs no GPU.
+    model = get_model(DEMUCS_MODEL)
+    model.eval()
+    if "vocals" not in model.sources:
+        raise RuntimeError(f"model '{DEMUCS_MODEL}' has no 'vocals' stem")
 
+    wav = AudioFile(path).read(
+        streams=0, samplerate=model.samplerate, channels=model.audio_channels
+    )
+    ref = wav.mean(0)
+    wav = (wav - ref.mean()) / (ref.std() + 1e-8)
+
+    with torch.no_grad():
+        sources = apply_model(model, wav[None], device="cpu", progress=False)[0]
+    sources = sources * ref.std() + ref.mean()
+
+    vocals = sources[model.sources.index("vocals")]
+    # Write with soundfile (already a dependency) rather than demucs's
+    # save_audio, which routes through a torchaudio backend that now requires
+    # torchcodec. soundfile wants (frames, channels); the stem is (channels, time).
+    data = vocals.t().cpu().numpy()
+    np.clip(data, -1.0, 1.0, out=data)
     out_path = os.path.join(out_dir, "vocals.wav")
-    save_audio(vocals, out_path, samplerate=separator.samplerate)
+    sf.write(out_path, data, model.samplerate, subtype="PCM_16")
     return out_path
 
 

@@ -80,6 +80,7 @@ html, body, #root { height: 100%; margin: 0; background: var(--lk-ink); }
 .app {
   display: grid;
   grid-template-columns: 248px 1fr 312px;
+  grid-template-rows: minmax(0, 1fr);
   flex: 1; min-height: 0;
   background: var(--lk-ink);
 }
@@ -151,7 +152,7 @@ html, body, #root { height: 100%; margin: 0; background: var(--lk-ink); }
 
 /* ─── Editor pane ───────────────────────────────────────────────────────── */
 .editor-pane {
-  display: flex; flex-direction: column; overflow: hidden;
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
   background: var(--lk-ink);
 }
 
@@ -512,6 +513,13 @@ html, body, #root { height: 100%; margin: 0; background: var(--lk-ink); }
   color: var(--lk-cyan);
 }
 
+.audio-isolate-toggle {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+  font: 400 12px "Source Code Pro", monospace;
+  color: var(--lk-text-muted); cursor: pointer;
+}
+.audio-isolate-toggle input { cursor: pointer; }
+
 /* ─── Transcribed lyrics ────────────────────────────────────────────────── */
 .audio-lyrics {
   margin-top: 10px; padding: 8px;
@@ -617,3 +625,309 @@ html, body, #root { height: 100%; margin: 0; background: var(--lk-ink); }
   color: var(--lk-mint);
   margin: 8px 0 0;
 }
+
+/* ─── AI Agent panel ────────────────────────────────────────────────────── */
+/* Unlike the other utilities, the agent pins a composer to the bottom and
+   scrolls only its message list — so while it is mounted the pane switches from
+   growing with its content to a fixed-height flex chain. Scoped with :has() so
+   the audio and Logic panels keep their existing scroll behaviour. */
+.utilities-pane:has(.agent-panel) { height: 100%; }
+.utilities-pane:has(.agent-panel) .utilities-body { min-height: 0; }
+
+.agent-panel {
+  padding: 14px;
+  display: flex; flex-direction: column;
+  height: 100%;
+}
+
+.agent-header {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 8px;
+  flex: none;
+}
+.agent-header h2 {
+  font: 500 12px "Source Code Pro", monospace;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--lk-text-muted);
+  margin: 0;
+}
+.agent-header-actions { display: flex; align-items: center; gap: 6px; }
+
+.agent-model {
+  border: 1px solid var(--lk-line); border-radius: 4px;
+  background: var(--lk-surface-1);
+  color: var(--lk-text-secondary);
+  padding: 5px 8px; cursor: pointer;
+  font: 500 11px "Source Code Pro", monospace;
+  max-width: 160px;
+}
+.agent-model:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.agent-header-actions button {
+  border: 1px solid var(--lk-line); background: transparent;
+  border-radius: 4px; padding: 5px 10px; cursor: pointer;
+  font: 500 12px "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+  transition: border-color 0.18s ease-out, color 0.18s ease-out;
+}
+.agent-header-actions button:hover:not(:disabled) {
+  border-color: var(--lk-cyan); color: var(--lk-cyan);
+}
+.agent-header-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.agent-status {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; flex: none;
+  font: 400 11px "Source Code Pro", monospace;
+  color: var(--lk-text-muted);
+}
+.agent-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--lk-text-muted);
+}
+.agent-dot.online { background: var(--lk-mint); }
+.agent-dot.offline { background: var(--lk-peach); }
+
+.agent-threads {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 10px; flex: none;
+}
+.agent-thread {
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: 100%; cursor: pointer;
+  border: 1px solid var(--lk-line); border-radius: 999px;
+  padding: 3px 6px 3px 10px;
+  font: 400 11px "Manrope", sans-serif;
+  color: var(--lk-text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: border-color 0.18s ease-out, color 0.18s ease-out;
+}
+.agent-thread:hover { color: var(--lk-text-secondary); }
+.agent-thread.active {
+  border-color: var(--lk-cyan-border);
+  background: var(--lk-cyan-muted);
+  color: var(--lk-cyan);
+}
+.agent-thread-delete {
+  border: none; background: transparent; cursor: pointer;
+  color: inherit; opacity: 0.5;
+  font-size: 13px; line-height: 1; padding: 0 2px;
+}
+.agent-thread-delete:hover { opacity: 1; }
+
+.agent-error {
+  flex: none; margin: 10px 0 0;
+  font: 400 12px "Manrope", sans-serif;
+  color: var(--lk-peach);
+}
+
+.agent-empty {
+  font: 400 13px "Manrope", sans-serif;
+  color: var(--lk-text-muted);
+  margin: 12px 0 0;
+}
+
+.agent-messages {
+  flex: 1; overflow-y: auto;
+  margin-top: 12px; padding-right: 4px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.agent-msg {
+  border-radius: 8px; padding: 9px 11px;
+  font: 400 13px "Manrope", sans-serif;
+  line-height: 1.55;
+}
+.agent-msg-user {
+  background: var(--lk-cyan-muted);
+  border: 1px solid var(--lk-cyan-border);
+  color: var(--lk-text);
+  align-self: flex-end; max-width: 88%;
+}
+.agent-msg-assistant {
+  background: var(--lk-surface-1);
+  border: 1px solid var(--lk-line);
+  color: var(--lk-text);
+}
+/* Model output is plain text with meaningful line breaks (lyrics!), so keep
+   whitespace but still wrap long prose. */
+.agent-msg-text { white-space: pre-wrap; word-break: break-word; }
+
+.agent-caret {
+  color: var(--lk-cyan);
+  animation: agent-blink 1s steps(2, start) infinite;
+}
+@keyframes agent-blink { to { visibility: hidden; } }
+
+.agent-thinking-toggle {
+  border: none; background: transparent; cursor: pointer;
+  padding: 0 0 6px; display: block;
+  font: 500 10px "Source Code Pro", monospace;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--lk-text-muted);
+}
+.agent-thinking-toggle:hover { color: var(--lk-cyan); }
+
+.agent-thinking {
+  margin: 0 0 8px; padding: 8px;
+  border-left: 2px solid var(--lk-line);
+  background: var(--lk-ink);
+  border-radius: 4px;
+  font: 400 11px "Source Code Pro", monospace;
+  color: var(--lk-text-muted);
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 180px; overflow-y: auto;
+}
+
+.agent-msg-actions {
+  display: flex; gap: 6px; margin-top: 8px;
+}
+.agent-msg-actions button {
+  border: 1px solid var(--lk-line); background: transparent;
+  border-radius: 4px; padding: 3px 8px; cursor: pointer;
+  font: 500 11px "Manrope", sans-serif;
+  color: var(--lk-text-muted);
+  transition: border-color 0.18s ease-out, color 0.18s ease-out;
+}
+.agent-msg-actions button:hover {
+  border-color: var(--lk-cyan); color: var(--lk-cyan);
+}
+
+.agent-composer {
+  flex: none; margin-top: 10px;
+  border-top: 1px solid var(--lk-line);
+  padding-top: 10px;
+}
+
+.agent-input {
+  width: 100%; resize: vertical;
+  border: 1px solid var(--lk-line); border-radius: 6px;
+  background: var(--lk-surface-1);
+  color: var(--lk-text);
+  padding: 8px 10px;
+  font: 400 13px "Manrope", sans-serif;
+  line-height: 1.5;
+  transition: border-color 0.18s ease-out;
+}
+.agent-input:focus { outline: none; border-color: var(--lk-cyan-border); }
+.agent-input::placeholder { color: var(--lk-text-muted); }
+.agent-input:disabled { opacity: 0.5; }
+
+.agent-composer-actions {
+  display: flex; align-items: center;
+  justify-content: flex-end; gap: 12px;
+  margin-top: 8px;
+}
+/* Toggles sit left, the send/stop button right. */
+.agent-composer-actions .agent-think-toggle:first-child { margin-right: auto; }
+
+.agent-think-toggle {
+  display: flex; align-items: center; gap: 5px;
+  font: 400 12px "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+  cursor: pointer;
+}
+.agent-think-toggle input[type="checkbox"] { accent-color: var(--lk-cyan); }
+
+.agent-composer-actions > button {
+  border: none; border-radius: 4px;
+  background: var(--lk-cyan);
+  color: var(--lk-ink);
+  padding: 7px 16px; cursor: pointer;
+  font: 600 12px "Manrope", sans-serif;
+  transition: background 0.18s ease-out;
+}
+.agent-composer-actions > button:hover:not(:disabled) { background: var(--lk-cyan-hover); }
+.agent-composer-actions > button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.agent-context-toggle {
+  margin-left: auto;
+  border: 1px solid var(--lk-line); background: transparent;
+  border-radius: 999px; padding: 2px 8px; cursor: pointer;
+  font: 400 10px "Source Code Pro", monospace;
+  color: var(--lk-text-muted);
+  transition: border-color 0.18s ease-out, color 0.18s ease-out;
+}
+.agent-context-toggle:hover { border-color: var(--lk-mint-border); color: var(--lk-mint); }
+
+/* The verbatim context block — shown so it is never a mystery what the
+   agent can and cannot see. */
+.agent-context {
+  flex: none; margin: 8px 0 0; padding: 10px;
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid var(--lk-line); border-radius: 6px;
+  background: var(--lk-surface-1);
+  font: 400 11px "Source Code Pro", monospace;
+  color: var(--lk-text-secondary);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+/* ─── Pane resizers ─────────────────────────────────────────────────────── */
+/* The grid column is narrow, but the grab area is widened with padding and a
+   negative margin so the divider is easy to hit without shifting the layout. */
+.pane-resizer {
+  width: 5px;
+  margin: 0 -3px;
+  padding: 0 3px;
+  cursor: col-resize;
+  background-clip: content-box;
+  background-color: transparent;
+  z-index: 2;
+  transition: background-color 0.18s ease-out;
+}
+.pane-resizer:hover,
+.pane-resizer:focus-visible {
+  background-color: var(--lk-cyan);
+  outline: none;
+}
+.pane-resizer:focus-visible { background-color: var(--lk-cyan-hover); }
+
+/* ─── Proposed song edit ────────────────────────────────────────────────── */
+/* Rewrites are shown as their own card rather than as chat text, so what
+   lands in the song is exactly what is displayed here — never the model's
+   commentary around it. */
+.agent-edit {
+  margin-top: 10px;
+  border: 1px solid var(--lk-mint-border);
+  border-radius: 8px;
+  background: var(--lk-ink);
+  overflow: hidden;
+}
+
+.agent-edit-header {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--lk-line);
+  background: rgba(163, 255, 176, 0.06);
+  font: 500 10px "Source Code Pro", monospace;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--lk-mint);
+}
+
+.agent-edit-body {
+  margin: 0; padding: 10px;
+  max-height: 260px; overflow-y: auto;
+  font: 400 12px/1.7 "Source Code Pro", monospace;
+  color: var(--lk-text);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.agent-edit-actions {
+  display: flex; gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--lk-line);
+}
+.agent-edit-actions button {
+  border: 1px solid var(--lk-line); background: transparent;
+  border-radius: 4px; padding: 5px 12px; cursor: pointer;
+  font: 500 12px "Manrope", sans-serif;
+  color: var(--lk-text-secondary);
+  transition: border-color 0.18s ease-out, color 0.18s ease-out, background 0.18s ease-out;
+}
+.agent-edit-actions button:hover { border-color: var(--lk-mint-border); color: var(--lk-mint); }
+.agent-edit-actions button.primary {
+  border-color: transparent;
+  background: var(--lk-mint);
+  color: var(--lk-ink);
+  font-weight: 600;
+}
+.agent-edit-actions button.primary:hover { background: #b9ffc4; color: var(--lk-ink); }

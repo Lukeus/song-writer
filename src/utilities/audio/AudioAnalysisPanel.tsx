@@ -37,6 +37,7 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [lyricsFor, setLyricsFor] = useState<number | null>(null);
+  const [isolateVocals, setIsolateVocals] = useState(false);
   const [masteringFor, setMasteringFor] = useState<number | null>(null);
 
   const songOpen = activeSong != null;
@@ -128,7 +129,7 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
     mergeMedia({ ...m, transcription_status: "running" });
     setLyricsFor(m.id);
     try {
-      mergeMedia(await transcribeMedia(m.id));
+      mergeMedia(await transcribeMedia(m.id, isolateVocals));
     } catch (e) {
       setError(String(e));
     }
@@ -160,6 +161,15 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
           ? "Drag music files here to analyze and attach to this song"
           : "Open a song first to attach audio"}
       </div>
+
+      <label className="audio-isolate-toggle" title="Separate the vocals with Demucs before transcribing — more accurate on full mixes, but noticeably slower.">
+        <input
+          type="checkbox"
+          checked={isolateVocals}
+          onChange={(e) => setIsolateVocals(e.target.checked)}
+        />
+        Isolate vocals before transcribing (slower, more accurate)
+      </label>
 
       {error && <p className="audio-error">{error}</p>}
 

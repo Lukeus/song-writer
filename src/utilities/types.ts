@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { JSONContent } from "@tiptap/react";
 import type { Song } from "../api";
 
 /**
@@ -13,6 +14,16 @@ export interface UtilityContext {
   onSongChanged: (song: Song) => void;
   /** Append text (one paragraph per line) into the active song's editor. */
   insertLyrics: (text: string) => void;
+  /**
+   * Append pre-built editor blocks — used for lyrics carrying chord nodes,
+   * which plain text cannot express.
+   */
+  insertBlocks: (blocks: JSONContent[]) => void;
+  /**
+   * Replace the song's entire body with `blocks`. Destructive, so callers must
+   * confirm with the user first.
+   */
+  replaceBlocks: (blocks: JSONContent[]) => void;
 }
 
 /**

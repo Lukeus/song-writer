@@ -157,9 +157,54 @@ fn migrate(conn: &Connection) -> Result<(), String> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_song_media_song ON song_media(song_id);
+
+        -- A configured language-model endpoint. `kind` selects the Rust impl
+        -- (`ai::build_provider`); everything else is per-instance config.
+        CREATE TABLE IF NOT EXISTS ai_providers (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind         TEXT NOT NULL,
+            label        TEXT NOT NULL,
+            base_url     TEXT NOT NULL,
+            model        TEXT,
+            options_json TEXT,
+            is_default   INTEGER NOT NULL DEFAULT 0,
+            created_at   TEXT NOT NULL
+        );
+
+        -- A chat thread. `song_id` is NULL for library-wide conversations, so
+        -- the same table backs both the per-song agent and the (later)
+        -- multi-song review.
+        CREATE TABLE IF NOT EXISTS ai_conversations (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            song_id     INTEGER REFERENCES songs(id) ON DELETE CASCADE,
+            provider_id INTEGER REFERENCES ai_providers(id) ON DELETE SET NULL,
+            model       TEXT NOT NULL,
+            title       TEXT NOT NULL DEFAULT 'New chat',
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ai_conversations_song
+            ON ai_conversations(song_id);
+
+        CREATE TABLE IF NOT EXISTS ai_messages (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL
+                            REFERENCES ai_conversations(id) ON DELETE CASCADE,
+            role            TEXT NOT NULL,
+            content         TEXT NOT NULL,
+            thinking        TEXT,
+            tool_calls_json TEXT,
+            created_at      TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation
+            ON ai_messages(conversation_id);
         "#,
     )
     .map_err(|e| e.to_string())?;
+
+    seed_default_provider(conn)?;
 
     // Additively bring pre-existing `media_files` tables up to the current
     // schema. `CREATE TABLE IF NOT EXISTS` won't add columns to a table that
@@ -535,4 +580,337 @@ pub fn list_logic_projects(conn: &Connection) -> Result<Vec<LogicProjectRow>, St
         })
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// AI providers / conversations / messages
+// ---------------------------------------------------------------------------
+
+/// A configured language-model endpoint. `kind` picks the Rust implementation;
+/// `model` is the last model chosen for this provider (remembered across runs).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiProvider {
+    pub id: i64,
+    /// `ollama` today; new vendors add a `kind` and a `Provider` impl.
+    pub kind: String,
+    pub label: String,
+    pub base_url: String,
+    pub model: Option<String>,
+    /// Free-form provider-specific JSON (unused by Ollama).
+    pub options_json: Option<String>,
+    pub is_default: bool,
+    pub created_at: String,
+}
+
+/// A chat thread, scoped to a song or (with `song_id = None`) to the library.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiConversation {
+    pub id: i64,
+    pub song_id: Option<i64>,
+    pub provider_id: Option<i64>,
+    pub model: String,
+    pub title: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// One turn in a conversation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiMessage {
+    pub id: i64,
+    pub conversation_id: i64,
+    /// `user` | `assistant` (`tool` arrives with the agent loop).
+    pub role: String,
+    pub content: String,
+    /// Reasoning emitted by thinking-capable models, kept out of `content`.
+    pub thinking: Option<String>,
+    /// Reserved for the tool-calling loop; always `None` today.
+    pub tool_calls_json: Option<String>,
+    pub created_at: String,
+}
+
+/// Ollama on its default port, inserted once so the feature works with no setup.
+const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
+
+/// Insert the built-in local-Ollama provider the first time the DB is opened.
+/// Later runs leave the table alone, so a user who edited or deleted it keeps
+/// their choice.
+fn seed_default_provider(conn: &Connection) -> Result<(), String> {
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM ai_providers", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    if count > 0 {
+        return Ok(());
+    }
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO ai_providers (kind, label, base_url, is_default, created_at)
+         VALUES ('ollama', 'Local Ollama', ?1, 1, ?2)",
+        params![DEFAULT_OLLAMA_URL, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+const PROVIDER_COLS: &str =
+    "id, kind, label, base_url, model, options_json, is_default, created_at";
+
+pub fn list_ai_providers(conn: &Connection) -> Result<Vec<AiProvider>, String> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {PROVIDER_COLS} FROM ai_providers ORDER BY is_default DESC, id"
+        ))
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], row_to_provider)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+pub fn get_ai_provider(conn: &Connection, id: i64) -> Result<AiProvider, String> {
+    conn.query_row(
+        &format!("SELECT {PROVIDER_COLS} FROM ai_providers WHERE id = ?1"),
+        params![id],
+        row_to_provider,
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// The provider marked default, falling back to the lowest id.
+pub fn default_ai_provider(conn: &Connection) -> Result<AiProvider, String> {
+    conn.query_row(
+        &format!(
+            "SELECT {PROVIDER_COLS} FROM ai_providers
+             ORDER BY is_default DESC, id LIMIT 1"
+        ),
+        [],
+        row_to_provider,
+    )
+    .map_err(|_| "no AI provider configured".to_string())
+}
+
+pub fn create_ai_provider(
+    conn: &Connection,
+    kind: &str,
+    label: &str,
+    base_url: &str,
+    model: Option<&str>,
+) -> Result<AiProvider, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO ai_providers (kind, label, base_url, model, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![kind, label, base_url, model, now],
+    )
+    .map_err(|e| e.to_string())?;
+    get_ai_provider(conn, conn.last_insert_rowid())
+}
+
+/// Update a provider's editable fields; `None` leaves a field unchanged.
+pub fn update_ai_provider(
+    conn: &Connection,
+    id: i64,
+    label: Option<&str>,
+    base_url: Option<&str>,
+    model: Option<&str>,
+) -> Result<AiProvider, String> {
+    conn.execute(
+        "UPDATE ai_providers SET
+             label    = COALESCE(?2, label),
+             base_url = COALESCE(?3, base_url),
+             model    = COALESCE(?4, model)
+         WHERE id = ?1",
+        params![id, label, base_url, model],
+    )
+    .map_err(|e| e.to_string())?;
+    get_ai_provider(conn, id)
+}
+
+/// Mark one provider default, clearing the flag on all others.
+pub fn set_default_ai_provider(conn: &Connection, id: i64) -> Result<AiProvider, String> {
+    conn.execute(
+        "UPDATE ai_providers SET is_default = CASE id WHEN ?1 THEN 1 ELSE 0 END",
+        params![id],
+    )
+    .map_err(|e| e.to_string())?;
+    get_ai_provider(conn, id)
+}
+
+pub fn delete_ai_provider(conn: &Connection, id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM ai_providers WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn row_to_provider(row: &rusqlite::Row) -> rusqlite::Result<AiProvider> {
+    Ok(AiProvider {
+        id: row.get(0)?,
+        kind: row.get(1)?,
+        label: row.get(2)?,
+        base_url: row.get(3)?,
+        model: row.get(4)?,
+        options_json: row.get(5)?,
+        is_default: row.get::<_, i64>(6)? != 0,
+        created_at: row.get(7)?,
+    })
+}
+
+const CONVERSATION_COLS: &str =
+    "id, song_id, provider_id, model, title, created_at, updated_at";
+
+pub fn create_ai_conversation(
+    conn: &Connection,
+    song_id: Option<i64>,
+    provider_id: i64,
+    model: &str,
+) -> Result<AiConversation, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO ai_conversations (song_id, provider_id, model, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?4)",
+        params![song_id, provider_id, model, now],
+    )
+    .map_err(|e| e.to_string())?;
+    get_ai_conversation(conn, conn.last_insert_rowid())
+}
+
+pub fn get_ai_conversation(conn: &Connection, id: i64) -> Result<AiConversation, String> {
+    conn.query_row(
+        &format!("SELECT {CONVERSATION_COLS} FROM ai_conversations WHERE id = ?1"),
+        params![id],
+        row_to_conversation,
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// Conversations for a song, or the library-wide ones when `song_id` is `None`.
+pub fn list_ai_conversations(
+    conn: &Connection,
+    song_id: Option<i64>,
+) -> Result<Vec<AiConversation>, String> {
+    let sql = format!(
+        "SELECT {CONVERSATION_COLS} FROM ai_conversations
+         WHERE song_id IS ?1 ORDER BY updated_at DESC"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![song_id], row_to_conversation)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Bump `updated_at`, and set the title if it is still the placeholder.
+pub fn touch_ai_conversation(
+    conn: &Connection,
+    id: i64,
+    title_if_unset: Option<&str>,
+) -> Result<AiConversation, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE ai_conversations SET
+             updated_at = ?2,
+             title = CASE WHEN title = 'New chat' AND ?3 IS NOT NULL
+                          THEN ?3 ELSE title END
+         WHERE id = ?1",
+        params![id, now, title_if_unset],
+    )
+    .map_err(|e| e.to_string())?;
+    get_ai_conversation(conn, id)
+}
+
+/// Switch the model a conversation uses for subsequent turns.
+pub fn set_ai_conversation_model(
+    conn: &Connection,
+    id: i64,
+    model: &str,
+) -> Result<AiConversation, String> {
+    conn.execute(
+        "UPDATE ai_conversations SET model = ?2 WHERE id = ?1",
+        params![id, model],
+    )
+    .map_err(|e| e.to_string())?;
+    get_ai_conversation(conn, id)
+}
+
+pub fn delete_ai_conversation(conn: &Connection, id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM ai_conversations WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn row_to_conversation(row: &rusqlite::Row) -> rusqlite::Result<AiConversation> {
+    Ok(AiConversation {
+        id: row.get(0)?,
+        song_id: row.get(1)?,
+        provider_id: row.get(2)?,
+        model: row.get(3)?,
+        title: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+    })
+}
+
+const MESSAGE_COLS: &str =
+    "id, conversation_id, role, content, thinking, tool_calls_json, created_at";
+
+pub fn add_ai_message(
+    conn: &Connection,
+    conversation_id: i64,
+    role: &str,
+    content: &str,
+    thinking: Option<&str>,
+) -> Result<AiMessage, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO ai_messages (conversation_id, role, content, thinking, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![conversation_id, role, content, thinking, now],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.query_row(
+        &format!("SELECT {MESSAGE_COLS} FROM ai_messages WHERE id = ?1"),
+        params![conn.last_insert_rowid()],
+        row_to_ai_message,
+    )
+    .map_err(|e| e.to_string())
+}
+
+pub fn list_ai_messages(
+    conn: &Connection,
+    conversation_id: i64,
+) -> Result<Vec<AiMessage>, String> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {MESSAGE_COLS} FROM ai_messages
+             WHERE conversation_id = ?1 ORDER BY id"
+        ))
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![conversation_id], row_to_ai_message)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Delete a message and everything after it — used to retry a turn.
+pub fn truncate_ai_messages_from(conn: &Connection, message_id: i64) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM ai_messages
+         WHERE conversation_id = (SELECT conversation_id FROM ai_messages WHERE id = ?1)
+           AND id >= ?1",
+        params![message_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn row_to_ai_message(row: &rusqlite::Row) -> rusqlite::Result<AiMessage> {
+    Ok(AiMessage {
+        id: row.get(0)?,
+        conversation_id: row.get(1)?,
+        role: row.get(2)?,
+        content: row.get(3)?,
+        thinking: row.get(4)?,
+        tool_calls_json: row.get(5)?,
+        created_at: row.get(6)?,
+    })
 }

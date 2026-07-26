@@ -13,6 +13,18 @@ printing a single JSON object to stdout:
   `SONGWRITER_WHISPER_MODEL` (e.g. `medium`) to trade speed for accuracy on dense
   mixes; the default is `small`.
 
+  Pass `--isolate` to first separate the mix with
+  [Demucs](https://github.com/adefossez/demucs) and transcribe only the **vocals**
+  stem — markedly more accurate on full mixes, but slow and memory-heavy (Demucs
+  pulls in PyTorch and downloads its model on first use). Override the separation
+  model with `SONGWRITER_DEMUCS_MODEL` (default `htdemucs`). In the app this is the
+  "Isolate vocals" checkbox in the Audio Analysis panel.
+
+  ```bash
+  python3 transcribe.py /path/to/track.wav            # transcribe the mix
+  python3 transcribe.py /path/to/track.wav --isolate  # isolate vocals first
+  ```
+
 ## Develop / test standalone
 
 ```bash
@@ -26,9 +38,11 @@ In **debug builds** the app calls each script directly with the project venv's
 `python3` (falling back to system `python3`), so you can iterate without
 packaging. `transcribe.py` needs `faster-whisper` installed in that venv.
 
-> Note: `src-tauri/binaries/transcriber-<triple>` ships as a tiny placeholder
-> script so `pnpm tauri dev` builds. Replace it with a real PyInstaller binary
-> (below) before a release build.
+> Note: **both** `src-tauri/binaries/analyzer-<triple>` and
+> `transcriber-<triple>` ship as tiny placeholder scripts so `pnpm tauri dev`
+> builds on a fresh clone. The real binaries are ~77 MB of PyInstaller output
+> each and are deliberately not committed — build them (below) before a release
+> build.
 
 ## Package as Tauri sidecars (for release builds)
 

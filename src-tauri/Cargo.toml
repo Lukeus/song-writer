@@ -27,4 +27,15 @@ serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 walkdir = "2"
 chrono = { version = "0.4", features = ["serde"] }
+# AI providers talk HTTP from Rust (not the webview): Ollama's CORS rejects the
+# Tauri origin, and future providers' API keys must never reach the frontend.
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "stream",
+    "charset",
+    "http2",
+    "rustls-tls",
+] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+async-trait = "0.1"
 

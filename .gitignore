@@ -12,6 +12,19 @@ dist
 dist-ssr
 *.local
 
+# Python: the analyzer's virtualenv and bytecode
+venv
+.venv
+__pycache__/
+*.py[cod]
+
+# PyInstaller output. The committed files under src-tauri/binaries/ are small
+# placeholders — Tauri only needs them to exist. Real sidecars are ~77 MB each
+# and are built locally (see analyzer/README.md), never committed.
+analyzer/build
+analyzer/dist
+*.spec
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
