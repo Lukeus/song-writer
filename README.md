@@ -22,9 +22,7 @@ Whisper. Nothing is uploaded.
 
 ## Features
 
-**Chord editor.** Chords are zero-width inline nodes inserted immediately before
-the syllable they sit over, so they travel with that syllable when the line
-wraps. A suggestions bar offers the diatonic chords of the inferred key.
+**Chord editor & Voicings.** Chords are zero-width inline nodes inserted immediately before the syllable they sit over, accompanied by interactive chord shape diagrams, guitar/piano voicings, and diatonic suggestions.
 
 **Audio analysis.** Attach audio to a song (referenced in place, never copied)
 and get BPM, musical key, duration, and a chord timeline.
@@ -32,8 +30,9 @@ and get BPM, musical key, duration, and a chord timeline.
 **Lyric transcription.** Local Whisper turns a recording's vocals into
 timestamped lyrics, optionally isolating the vocal stem with Demucs first.
 
-**Mastering.** Measure LUFS, true peak, LRA, dynamics and tonal balance, get
-recommendations, and render a mastered copy to a target loudness.
+**Mastering & Audio Studio.** Measure LUFS, true peak, LRA, dynamics, A/B test audio takes with a parametric EQ canvas, AI mastering agent, and render mastered copies.
+
+**MIDI Generation.** Export chord progressions as MIDI files.
 
 **AI agent.** A songwriting collaborator that is given the actual song — see
 below.
@@ -104,14 +103,22 @@ src/                          React frontend
     PaneResizer.tsx           draggable, persisted pane widths
     UtilitiesPane.tsx         tabbed host for utilities
     Dashboard.tsx             library overview
+    AudioStudioModal.tsx      modal audio studio & comparison
+    AudioComparisonStudio.tsx A/B testing & parametric EQ canvas
+    AiAudioMasteringAgent.tsx AI mastering agent
+    GlobalAudioBar.tsx        persistent global audio player bar
+    ParametricEqCanvas.tsx    interactive EQ curve visualization
   editor/
     ChordNode.ts              the custom TipTap inline chord node
     ChordEditor.tsx           editor + chord-insertion toolbar
     musicTheory.ts            key inference + diatonic chord suggestions
+    chordShapes.ts            guitar and piano chord diagrams
+    lyricHelpers.ts           lyric formatting & parsing helpers
   utilities/                  self-contained feature panels
     registry.ts               register a utility here to add a tab
     ai/                       the agent panel
     audio/                    analysis, playback, mastering
+    chords/                   chord voicings & progression panel
     logic/                    Logic project linking
 
 src-tauri/src/                Rust backend
@@ -119,6 +126,7 @@ src-tauri/src/                Rust backend
   commands.rs                 song + Logic project commands
   db.rs                       SQLite schema + CRUD
   logic.rs                    .logicx bundle scanner
+  midi.rs                     MIDI generation and export
   ai/
     mod.rs                    Provider trait, streaming events, run registry
     ollama.rs                 the Ollama provider
