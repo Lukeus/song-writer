@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { useGlobalAudio } from "../../audio/GlobalAudioContext";
 import type { MediaFile } from "../../api";
 
 /**
@@ -24,69 +25,109 @@ function fmt(secs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-/** Inline play/pause + seekable waveform for one attached audio file. */
-export function AudioPlayer({ media }: { media: MediaFile }) {
+/** Inline play/pause + seekable waveform for one attached audio file with Global Player routing. */
+export function AudioPlayer({
+  media,
+  onOpenStudio,
+}: {
+  media: MediaFile;
+  onOpenStudio?: () => void;
+}) {
+  const {
+    primaryTrack,
+    activeSource,
+    isPlaying: globalPlaying,
+    currentTime: globalCurrentTime,
+    duration: globalDuration,
+    playTrack,
+    togglePlay: toggleGlobalPlay,
+    seek: globalSeek,
+    setReferenceTrack,
+    referenceTrack,
+  } = useGlobalAudio();
+
+  const isGlobalTarget = primaryTrack?.id === media.id;
+  const isGlobalRef = referenceTrack?.id === media.id;
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [current, setCurrent] = useState(0);
-  const [duration, setDuration] = useState(media.duration_secs ?? 0);
+  const [localPlaying, setLocalPlaying] = useState(false);
+  const [localCurrent, setLocalCurrent] = useState(0);
+  const [localDuration, setLocalDuration] = useState(media.duration_secs ?? 0);
   const [error, setError] = useState(false);
 
   const src = useMemo(() => convertFileSrc(media.path), [media.path]);
   const bars = useMemo(() => waveformBars(media.id), [media.id]);
 
+  // Use global timing if this track is the active global primary track
+  const isPlaying = isGlobalTarget && activeSource === "primary" ? globalPlaying : localPlaying;
+  const current = isGlobalTarget && activeSource === "primary" ? globalCurrentTime : localCurrent;
+  const duration = isGlobalTarget && activeSource === "primary" ? (globalDuration || localDuration) : localDuration;
+
   // Reset transport when the underlying file changes.
   useEffect(() => {
-    setPlaying(false);
-    setCurrent(0);
+    setLocalPlaying(false);
+    setLocalCurrent(0);
     setError(false);
-    setDuration(media.duration_secs ?? 0);
+    setLocalDuration(media.duration_secs ?? 0);
   }, [media.path, media.duration_secs]);
 
   const toggle = () => {
-    const el = audioRef.current;
-    if (!el) return;
-    if (el.paused) el.play().catch(() => setError(true));
-    else el.pause();
+    if (isGlobalTarget) {
+      toggleGlobalPlay();
+      return;
+    }
+
+    // Load into global audio engine
+    playTrack(media);
   };
 
   const progress = duration > 0 ? current / duration : 0;
 
   const seek = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = audioRef.current;
-    if (!el || !duration) return;
+    if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    el.currentTime = ratio * duration;
-    setCurrent(el.currentTime);
+    const target = ratio * duration;
+
+    if (isGlobalTarget) {
+      globalSeek(target);
+    } else {
+      const el = audioRef.current;
+      if (el) {
+        el.currentTime = target;
+        setLocalCurrent(target);
+      }
+    }
   };
 
   return (
-    <div className="audio-player">
-      <audio
-        ref={audioRef}
-        src={src}
-        preload="metadata"
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => {
-          setPlaying(false);
-          setCurrent(0);
-        }}
-        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) =>
-          setDuration(e.currentTarget.duration || media.duration_secs || 0)
-        }
-        onError={() => setError(true)}
-      />
+    <div className={`audio-player ${isGlobalTarget ? "global-active" : ""}`}>
+      {!isGlobalTarget && (
+        <audio
+          ref={audioRef}
+          src={src}
+          preload="metadata"
+          onPlay={() => setLocalPlaying(true)}
+          onPause={() => setLocalPlaying(false)}
+          onEnded={() => {
+            setLocalPlaying(false);
+            setLocalCurrent(0);
+          }}
+          onTimeUpdate={(e) => setLocalCurrent(e.currentTarget.currentTime)}
+          onLoadedMetadata={(e) =>
+            setLocalDuration(e.currentTarget.duration || media.duration_secs || 0)
+          }
+          onError={() => setError(true)}
+        />
+      )}
       <button
-        className={"audio-play" + (playing ? " playing" : "")}
+        className={"audio-play" + (isPlaying ? " playing" : "")}
         onClick={toggle}
         disabled={error}
-        title={playing ? "Pause" : "Play"}
-        aria-label={playing ? "Pause" : "Play"}
+        title={isPlaying ? "Pause" : "Play with EQ Engine"}
+        aria-label={isPlaying ? "Pause" : "Play with EQ Engine"}
       >
-        {playing ? "❚❚" : "▸"}
+        {isPlaying ? "❚❚" : "▸"}
       </button>
       <div
         className="audio-wave"
@@ -104,6 +145,33 @@ export function AudioPlayer({ media }: { media: MediaFile }) {
       <span className="audio-time">
         {error ? "unplayable" : `${fmt(current)} / ${fmt(duration)}`}
       </span>
+
+      {/* Quick Action buttons */}
+      <div className="audio-player-actions">
+        {onOpenStudio && (
+          <button
+            type="button"
+            className="player-action-btn"
+            onClick={() => {
+              playTrack(media);
+              onOpenStudio();
+            }}
+            title="Open in EQ & Mastering Studio"
+          >
+            EQ Studio
+          </button>
+        )}
+        <button
+          type="button"
+          className={`player-action-btn ${isGlobalRef ? "active" : ""}`}
+          onClick={() => {
+            setReferenceTrack(isGlobalRef ? null : media);
+          }}
+          title={isGlobalRef ? "Clear Reference Track" : "Set as A/B Reference Track"}
+        >
+          {isGlobalRef ? "◈ Ref B" : "Set Ref"}
+        </button>
+      </div>
     </div>
   );
 }

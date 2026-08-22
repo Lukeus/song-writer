@@ -1,5 +1,6 @@
 import { aiAgentUtility } from "./ai";
 import { audioAnalysisUtility } from "./audio";
+import { chordVoicingsUtility } from "./chords";
 import { logicProjectsUtility } from "./logic";
 import type { Utility } from "./types";
 
@@ -8,7 +9,9 @@ import type { Utility } from "./types";
  * To add a feature: create a module under `utilities/` and append it here.
  */
 export const UTILITIES: Utility[] = [
-  aiAgentUtility,
   audioAnalysisUtility,
+  chordVoicingsUtility,
   logicProjectsUtility,
+  aiAgentUtility,
 ];
+

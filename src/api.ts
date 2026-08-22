@@ -22,6 +22,37 @@ export interface LogicProject {
   last_scanned_at: string;
 }
 
+/** An alternative version inside a Logic Pro project bundle. */
+export interface ProjectAlternative {
+  id: string;
+  name: string;
+  modified_at: string | null;
+}
+
+/** Deep metadata extracted from a `.logicx` project bundle. */
+export interface LogicProjectDetails {
+  name: string;
+  path: string;
+  alternatives: ProjectAlternative[];
+  bounces_count: number;
+  audio_files_count: number;
+  created_at: string | null;
+  modified_at: string | null;
+}
+
+/** Result of waveform & metadata matching between a song and a Logic project. */
+export interface AudioMatchResult {
+  logic_project_id: number;
+  logic_project_name: string;
+  logic_project_path: string;
+  matched_bounce_path: string;
+  matched_bounce_name: string;
+  confidence_pct: number;
+  similarity_score: number;
+  match_reason: string;
+  origin?: string | null;
+}
+
 /** A chord detected at a point in time within a media file. */
 export interface ChordHit {
   time: number;
@@ -76,6 +107,23 @@ export interface MasteringReport {
   recommendations: string[];
 }
 
+/** A bounced audio file found inside or next to a Logic Pro project bundle, or in a global bounce directory. */
+export interface ProjectBounce {
+  name: string;
+  path: string;
+  size_bytes: number;
+  format: string;
+  modified_at: string | null;
+  origin?: string | null;
+}
+
+/** A registered global bounce / export folder. */
+export interface BounceFolder {
+  id: number;
+  path: string;
+  created_at: string;
+}
+
 // ---- Songs ---------------------------------------------------------------
 
 export const createSong = (title: string, contentJson: string) =>
@@ -99,6 +147,33 @@ export const scanLogicProjects = (directory: string) =>
   invoke<LogicProject[]>("scan_logic_projects", { directory });
 
 export const listLogicProjects = () => invoke<LogicProject[]>("list_logic_projects");
+
+export const openLogicProject = (path: string) =>
+  invoke<void>("open_logic_project", { path });
+
+export const listProjectBounces = (projectPath: string) =>
+  invoke<ProjectBounce[]>("list_project_bounces", { projectPath });
+
+export const getLogicProjectDetails = (path: string) =>
+  invoke<LogicProjectDetails>("get_logic_project_details", { path });
+
+export const findMatchingLogicProjects = (songId: number) =>
+  invoke<AudioMatchResult[]>("find_matching_logic_projects", { songId });
+
+export const cancelWaveformSearch = () =>
+  invoke<boolean>("cancel_waveform_search");
+
+export const exportSongMidi = (songId: number, destinationPath: string, bpm?: number) =>
+  invoke<string>("export_song_midi", { songId, destinationPath, bpm });
+
+export const listGlobalBounceFolders = () =>
+  invoke<BounceFolder[]>("list_global_bounce_folders");
+
+export const addGlobalBounceFolder = (path: string) =>
+  invoke<BounceFolder>("add_global_bounce_folder", { path });
+
+export const deleteGlobalBounceFolder = (id: number) =>
+  invoke<void>("delete_global_bounce_folder", { id });
 
 // ---- Audio analysis utility ----------------------------------------------
 
@@ -129,18 +204,59 @@ export const deleteMediaFile = (mediaFileId: number) =>
 export const meterMaster = (mediaFileId: number) =>
   invoke<MasteringReport>("meter_master", { mediaFileId });
 
-/** Render a mastered copy to `targetLufs` and associate it with the song. */
+/** Optional character & DSP toggles for audio mastering. */
+export interface MasteringOptions {
+  profile?: "warm" | "modern" | "loud" | "dynamic" | "custom";
+  tapeWarmth?: boolean;
+  stereoEnhance?: boolean;
+  clarityAir?: boolean;
+}
+
+/** Render a mastered copy to `targetLufs` with optional DSP enhancements. */
 export const renderMaster = (
   mediaFileId: number,
   songId: number,
   targetLufs: number,
   tonalCorrection: boolean,
+  options?: MasteringOptions,
 ) =>
   invoke<MediaFile>("render_master", {
     mediaFileId,
     songId,
     targetLufs,
     tonalCorrection,
+    profile: options?.profile,
+    tapeWarmth: options?.tapeWarmth,
+    stereoEnhance: options?.stereoEnhance,
+    clarityAir: options?.clarityAir,
+  });
+
+/** Serializable parametric EQ band for Rust FFmpeg master rendering. */
+export interface EqBandParam {
+  id: number;
+  name: string;
+  type: string;
+  frequency: number;
+  gain: number;
+  q: number;
+  enabled: boolean;
+}
+
+/** Render a mastered copy applying the exact active Parametric EQ filter curve. */
+export const renderMasterWithEq = (
+  mediaFileId: number,
+  songId: number,
+  targetLufs: number,
+  eqBands: EqBandParam[],
+  options?: { tapeWarmth?: boolean; stereoEnhance?: boolean },
+) =>
+  invoke<MediaFile>("render_master_with_eq", {
+    mediaFileId,
+    songId,
+    targetLufs,
+    eqBands,
+    tapeWarmth: options?.tapeWarmth,
+    stereoEnhance: options?.stereoEnhance,
   });
 
 // ---- AI agent ------------------------------------------------------------

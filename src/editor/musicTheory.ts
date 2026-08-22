@@ -114,3 +114,75 @@ export function suggestChordsInKey(chordSymbol: string): KeySuggestion | null {
 
   return { keyName: `${parsed.rootName} ${mode}`, mode, chords };
 }
+
+const CHROMATIC_SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const CHROMATIC_FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+
+/**
+ * Transpose a single root note by `semitones`.
+ */
+export function transposeRootNote(
+  root: string,
+  semitones: number,
+  preferFlats?: boolean,
+): string {
+  const clean = root.trim().replace("♯", "#").replace("♭", "b");
+  const pc = NOTE_TO_PC[clean];
+  if (pc === undefined) return root;
+
+  const targetPc = (pc + (semitones % 12) + 12) % 12;
+  const isFlat = preferFlats ?? (clean.includes("b") || clean === "F");
+  return isFlat ? CHROMATIC_FLATS[targetPc] : CHROMATIC_SHARPS[targetPc];
+}
+
+/**
+ * Transpose a chord symbol (including slash chords like G/B, Am7/G, C#m7b5) by `semitones`.
+ */
+export function transposeChord(symbol: string, semitones: number): string {
+  if (!symbol || semitones === 0) return symbol;
+  const sym = symbol.trim();
+
+  if (sym.includes("/")) {
+    const parts = sym.split("/");
+    const mainTransposed = transposeChord(parts[0], semitones);
+    const bassTransposed = parts[1]
+      ? transposeRootNote(parts[1], semitones, parts[1].includes("b") || parts[1].includes("♭"))
+      : "";
+    return bassTransposed ? `${mainTransposed}/${bassTransposed}` : mainTransposed;
+  }
+
+  const parsed = parseChord(sym);
+  if (!parsed) return symbol;
+
+  const preferFlats = parsed.rootName.includes("b") || parsed.rootName.includes("♭");
+  const newRoot = transposeRootNote(parsed.rootName, semitones, preferFlats);
+  return `${newRoot}${parsed.suffix}`;
+}
+
+/**
+ * Recursively transposes all chord nodes within a TipTap JSONContent document.
+ */
+export function transposeDoc(doc: any, semitones: number): any {
+  if (!doc || semitones === 0) return doc;
+
+  if (Array.isArray(doc)) {
+    return doc.map((item) => transposeDoc(item, semitones));
+  }
+
+  if (typeof doc === "object") {
+    const nextNode: any = { ...doc };
+    if (nextNode.type === "chord" && nextNode.attrs?.chord) {
+      nextNode.attrs = {
+        ...nextNode.attrs,
+        chord: transposeChord(nextNode.attrs.chord, semitones),
+      };
+    }
+    if (nextNode.content && Array.isArray(nextNode.content)) {
+      nextNode.content = nextNode.content.map((child: any) => transposeDoc(child, semitones));
+    }
+    return nextNode;
+  }
+
+  return doc;
+}
+
