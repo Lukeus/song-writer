@@ -19,6 +19,7 @@ and is intended as a useful approximation, not a transcription.
 """
 
 import json
+import multiprocessing
 import sys
 
 # Pitch-class names, index 0 == C.
@@ -92,6 +93,30 @@ def estimate_chords(chroma, beat_times, sr, hop_length):
     return chords
 
 
+def compute_fingerprint(chroma, sr, hop_length):
+    """Generate compact acoustic chroma hash sequence (12-bit bitmask per 0.5s frame)."""
+    import numpy as np
+
+    # Frame window: ~0.5 seconds per hash
+    frames_per_window = max(1, int((sr / hop_length) * 0.5))
+    hashes = []
+    num_frames = chroma.shape[1]
+
+    for start in range(0, num_frames, frames_per_window):
+        end = min(start + frames_per_window, num_frames)
+        if end <= start:
+            continue
+        chunk = chroma[:, start:end].mean(axis=1)
+        med = float(np.median(chunk))
+        val = 0
+        for i in range(12):
+            if chunk[i] > med:
+                val |= (1 << i)
+        hashes.append(val)
+
+    return hashes
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         fail("usage: analyze.py <audio-file>")
@@ -123,6 +148,7 @@ def main() -> None:
     key = estimate_key(chroma_mean)
     beat_times = librosa.frames_to_time(beats, sr=sr, hop_length=512)
     chords = estimate_chords(chroma, beat_times, sr, hop_length)
+    fingerprint = compute_fingerprint(chroma, sr, hop_length)
 
     print(
         json.dumps(
@@ -131,10 +157,12 @@ def main() -> None:
                 "key": key,
                 "duration_secs": round(duration, 2),
                 "chords": chords,
+                "fingerprint": fingerprint,
             }
         )
     )
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()

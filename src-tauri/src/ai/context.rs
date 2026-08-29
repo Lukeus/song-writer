@@ -104,7 +104,7 @@ fn describe_recording(m: &MediaFile) -> Option<String> {
         facts.push(format!("key of {key}"));
     }
     if let Some(secs) = m.duration_secs {
-        facts.push(format!("{}", duration(secs)));
+        facts.push(duration(secs));
     }
     let chords = chord_summary(m.chords_json.as_deref(), m.duration_secs);
     if facts.is_empty() && chords.is_none() {
@@ -367,7 +367,7 @@ const CHORD_SUFFIX_TOKENS: &[&str] = &[
 /// Deliberately strict: an uppercase root note, an optional accidental, then a
 /// suffix built only from recognised tokens, plus an optional `/bass`. This is
 /// what keeps `[Chorus]` (a `C` followed by `horus`) from being read as a chord.
-fn is_chord_symbol(s: &str) -> bool {
+pub fn is_chord_symbol(s: &str) -> bool {
     let s = s.trim();
     if s.is_empty() || s.chars().count() > 12 {
         return false;

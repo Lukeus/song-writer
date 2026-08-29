@@ -13,6 +13,7 @@ import {
 } from "../../api";
 import { MasteringSection } from "./MasteringSection";
 import { AudioPlayer } from "./AudioPlayer";
+import { AudioStudioModal } from "../../components/AudioStudioModal";
 import type { UtilityContext } from "../types";
 
 const AUDIO_EXTS = ["mp3", "wav", "aiff", "aif", "m4a", "flac", "ogg"];
@@ -30,7 +31,13 @@ function hasAudioExt(path: string): boolean {
 }
 
 /** Audio Analysis utility: import music files, analyze BPM/key/chords, link to song. */
-export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: UtilityContext) {
+export function AudioAnalysisPanel({
+  activeSongId,
+  activeSong,
+  insertLyrics,
+  insertBlocks,
+  onSongChanged,
+}: UtilityContext) {
   const [media, setMedia] = useState<MediaFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -39,6 +46,7 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
   const [lyricsFor, setLyricsFor] = useState<number | null>(null);
   const [isolateVocals, setIsolateVocals] = useState(false);
   const [masteringFor, setMasteringFor] = useState<number | null>(null);
+  const [studioOpen, setStudioOpen] = useState(false);
 
   const songOpen = activeSong != null;
 
@@ -141,13 +149,40 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
     setMedia((prev) => prev.filter((x) => x.id !== m.id));
   };
 
+  const syncChordsToEditor = (m: MediaFile) => {
+    const chords = parseChords(m);
+    if (chords.length === 0 || !activeSong) return;
+    const content: any[] = [];
+    chords.forEach((c, idx) => {
+      content.push({ type: "chord", attrs: { chord: c.label } });
+      content.push({ type: "text", text: idx < chords.length - 1 ? "   " : " " });
+    });
+    insertBlocks([{ type: "paragraph", content }]);
+  };
+
+  const adoptKeyBpm = (_m: MediaFile) => {
+    if (!activeSong) return;
+    onSongChanged(activeSong);
+  };
+
   return (
     <div className="audio-panel">
       <div className="audio-panel-header">
-        <h2>Audio Analysis</h2>
-        <button onClick={browse} disabled={!songOpen || busy}>
-          {busy ? "Importing…" : "Browse…"}
-        </button>
+        <h2>AUDIO ANALYSIS</h2>
+        <div className="audio-panel-header-actions">
+          <button
+            type="button"
+            className="audio-studio-open-btn"
+            onClick={() => setStudioOpen(true)}
+            disabled={!songOpen || media.length === 0}
+            title="Open Interactive Parametric EQ & A/B Comparison Studio"
+          >
+            studio & eq
+          </button>
+          <button onClick={browse} disabled={!songOpen || busy}>
+            {busy ? "importing…" : "browse…"}
+          </button>
+        </div>
       </div>
 
       <div
@@ -157,9 +192,14 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
           (songOpen ? "" : " disabled")
         }
       >
-        {songOpen
-          ? "Drag music files here to analyze and attach to this song"
-          : "Open a song first to attach audio"}
+        <div>
+          {songOpen
+            ? "drop an audio file to analyze"
+            : "open a song first to attach audio"}
+        </div>
+        <div className="audio-dropzone-sub">
+          MP3 · WAV · AIFF · M4A · FLAC
+        </div>
       </div>
 
       <label className="audio-isolate-toggle" title="Separate the vocals with Demucs before transcribing — more accurate on full mixes, but noticeably slower.">
@@ -168,7 +208,7 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
           checked={isolateVocals}
           onChange={(e) => setIsolateVocals(e.target.checked)}
         />
-        Isolate vocals before transcribing (slower, more accurate)
+        isolate vocals before transcribing (slower, more accurate)
       </label>
 
       {error && <p className="audio-error">{error}</p>}
@@ -199,11 +239,32 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
                   <span className="audio-item-error">{m.analyzer_error}</span>
                 )}
               </div>
-              <AudioPlayer media={m} />
+              <AudioPlayer media={m} onOpenStudio={() => setStudioOpen(true)} />
               <div className="audio-item-actions">
                 {chords.length > 0 && (
-                  <button onClick={() => setExpanded(isOpen ? null : m.id)}>
-                    {isOpen ? "Hide chords" : `Chords (${chords.length})`}
+                  <button
+                    className="audio-btn-primary"
+                    onClick={() => syncChordsToEditor(m)}
+                    disabled={!songOpen}
+                    title="Insert detected chord progression into the song editor"
+                  >
+                    sync chords
+                  </button>
+                )}
+                <button
+                  className={masteringFor === m.id ? "audio-btn-peach active" : "audio-btn-peach"}
+                  onClick={() => setMasteringFor(masteringFor === m.id ? null : m.id)}
+                  title="Analyze loudness and render a mastered copy"
+                >
+                  {masteringFor === m.id ? "hide mastering" : "master"}
+                </button>
+                {(m.musical_key || m.bpm != null) && (
+                  <button
+                    onClick={() => adoptKeyBpm(m)}
+                    disabled={!songOpen}
+                    title={`Use ${m.musical_key || ""} ${m.bpm ? `${m.bpm} BPM` : ""} for song suggestions`}
+                  >
+                    use key + bpm
                   </button>
                 )}
                 <button
@@ -211,14 +272,19 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
                   disabled={m.analysis_status === "running"}
                   title="Re-run analysis"
                 >
-                  Re-analyze
+                  re-analyze
                 </button>
+                {chords.length > 0 && (
+                  <button onClick={() => setExpanded(isOpen ? null : m.id)}>
+                    {isOpen ? "hide chords" : `chords (${chords.length})`}
+                  </button>
+                )}
                 {m.lyrics && (
                   <button
                     className={lyricsFor === m.id ? "active" : ""}
                     onClick={() => setLyricsFor(lyricsFor === m.id ? null : m.id)}
                   >
-                    {lyricsFor === m.id ? "Hide lyrics" : "Lyrics"}
+                    {lyricsFor === m.id ? "hide lyrics" : "lyrics"}
                   </button>
                 )}
                 <button
@@ -227,23 +293,16 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
                   title="Transcribe the vocals into lyrics (local Whisper)"
                 >
                   {m.transcription_status === "running"
-                    ? "Transcribing…"
+                    ? "transcribing…"
                     : m.lyrics
-                      ? "Re-transcribe"
-                      : "Transcribe lyrics"}
-                </button>
-                <button
-                  className={masteringFor === m.id ? "active" : ""}
-                  onClick={() => setMasteringFor(masteringFor === m.id ? null : m.id)}
-                  title="Analyze loudness and render a mastered copy"
-                >
-                  {masteringFor === m.id ? "Hide mastering" : "Master"}
+                      ? "re-transcribe"
+                      : "transcribe lyrics"}
                 </button>
                 <button onClick={() => revealItemInDir(m.path)} title="Reveal in Finder">
-                  Reveal
+                  reveal
                 </button>
                 <button onClick={() => remove(m)} title="Remove from song">
-                  Remove
+                  remove
                 </button>
               </div>
               {isOpen && chords.length > 0 && (
@@ -288,17 +347,36 @@ export function AudioAnalysisPanel({ activeSongId, activeSong, insertLyrics }: U
                 <MasteringSection
                   media={m}
                   songId={activeSongId}
-                  onRendered={(master) =>
+                  onRendered={(master) => {
                     setMedia((prev) =>
                       prev.some((x) => x.id === master.id) ? prev : [master, ...prev],
-                    )
-                  }
+                    );
+                    analyzeMedia(master.id)
+                      .then(mergeMedia)
+                      .catch((e) => setError(String(e)));
+                  }}
                 />
               )}
             </li>
           );
         })}
       </ul>
+      {studioOpen && (
+        <AudioStudioModal
+          isOpen={studioOpen}
+          onClose={() => setStudioOpen(false)}
+          songId={activeSongId ?? undefined}
+          availableMedia={media}
+          onMasterRendered={(master) => {
+            setMedia((prev) =>
+              prev.some((x) => x.id === master.id) ? prev : [master, ...prev],
+            );
+            analyzeMedia(master.id)
+              .then(mergeMedia)
+              .catch((e) => setError(String(e)));
+          }}
+        />
+      )}
     </div>
   );
 }

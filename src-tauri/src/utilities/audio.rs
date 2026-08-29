@@ -15,14 +15,16 @@ use tauri_plugin_shell::ShellExt;
 
 /// Shape of the analyzer's JSON stdout on success.
 #[derive(Debug, Deserialize)]
-struct AnalyzerOutput {
-    bpm: Option<f64>,
-    key: Option<String>,
-    duration_secs: Option<f64>,
+pub struct AnalyzerOutput {
+    pub bpm: Option<f64>,
+    pub key: Option<String>,
+    pub duration_secs: Option<f64>,
     /// Passed through verbatim; re-serialized for storage.
-    chords: Option<serde_json::Value>,
+    pub chords: Option<serde_json::Value>,
+    /// Chroma waveform fingerprint integer hash array.
+    pub fingerprint: Option<serde_json::Value>,
     /// Present (with a message) when the analyzer failed internally.
-    error: Option<String>,
+    pub error: Option<String>,
 }
 
 /// Shape of the transcriber's JSON stdout on success.
@@ -118,11 +120,15 @@ pub async fn analyze_media(
             let chords_json = out
                 .chords
                 .map(|c| serde_json::to_string(&c).unwrap_or_else(|_| "[]".into()));
+            let fingerprint_json = out
+                .fingerprint
+                .map(|f| serde_json::to_string(&f).unwrap_or_else(|_| "[]".into()));
             let result = AnalysisResult {
                 bpm: out.bpm,
                 key: out.key,
                 duration_secs: out.duration_secs,
                 chords_json,
+                fingerprint_json,
             };
             db::save_analysis(&conn, media_file_id, &result)
         }
@@ -214,8 +220,53 @@ async fn run_transcriber(
     ))
 }
 
+/// Ensure an audio file at `path` is imported and analyzed in SQLite, returning its [`MediaFile`].
+#[allow(dead_code)]
+pub async fn analyze_path_cached(
+    app: &AppHandle,
+    conn: &rusqlite::Connection,
+    path: &str,
+) -> Result<MediaFile, String> {
+    let p = Path::new(path);
+    if !p.is_file() {
+        return Err(format!("not a file: {path}"));
+    }
+
+    let name = p
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("audio")
+        .to_string();
+    let format = p
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase());
+    let size_bytes = std::fs::metadata(p).ok().map(|m| m.len() as i64);
+
+    let media = db::import_media_file(conn, path, &name, format.as_deref(), size_bytes)?;
+    if media.analysis_status == "done" && media.fingerprint_json.is_some() {
+        return Ok(media);
+    }
+
+    let out = run_analyzer(app, path).await?;
+    let chords_json = out
+        .chords
+        .map(|c| serde_json::to_string(&c).unwrap_or_else(|_| "[]".into()));
+    let fingerprint_json = out
+        .fingerprint
+        .map(|f| serde_json::to_string(&f).unwrap_or_else(|_| "[]".into()));
+    let result = AnalysisResult {
+        bpm: out.bpm,
+        key: out.key,
+        duration_secs: out.duration_secs,
+        chords_json,
+        fingerprint_json,
+    };
+    db::save_analysis(conn, media.id, &result)
+}
+
 /// Invoke the analyzer for `path`, returning its parsed JSON output.
-async fn run_analyzer(app: &AppHandle, path: &str) -> Result<AnalyzerOutput, String> {
+pub async fn run_analyzer(app: &AppHandle, path: &str) -> Result<AnalyzerOutput, String> {
     let (stdout, stderr, code) = run_sidecar(app, "analyze.py", "analyzer", &[path]).await?;
     if let Ok(parsed) = serde_json::from_str::<AnalyzerOutput>(stdout.trim()) {
         return Ok(parsed);

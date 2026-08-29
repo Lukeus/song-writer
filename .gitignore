@@ -35,3 +35,4 @@ analyzer/dist
 *.njsproj
 *.sln
 *.sw?
+.taurus/

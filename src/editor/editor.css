@@ -7,6 +7,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  background: var(--lk-ink);
 }
 
 /* ─── Toolbar ───────────────────────────────────────────────────────────── */
@@ -16,45 +17,132 @@
   gap: 8px;
   padding: 10px 40px;
   flex-wrap: wrap;
+  flex: none;
+  background: var(--lk-ink);
 }
 
 .chord-toolbar-input {
   width: 140px;
   padding: 7px 10px;
-  border: 1px solid var(--lk-line, #243140);
-  border-radius: 4px;
-  background: var(--lk-surface-1, #121922);
-  color: var(--lk-text, #EEF2F6);
-  font: 600 14px "Source Code Pro", monospace;
+  border: 1px solid var(--lk-line);
+  border-radius: var(--lk-radius);
+  background: var(--lk-surface-1);
+  color: var(--lk-text);
+  font: 400 13px var(--lk-mono);
   outline: none;
-  transition: border-color 0.18s ease-out;
+  transition: border-color var(--lk-dur-hover) var(--lk-ease), box-shadow var(--lk-dur-hover) var(--lk-ease);
 }
 .chord-toolbar-input:focus {
-  border-color: var(--lk-cyan, #7CD2FF);
+  border-color: var(--lk-cyan);
+  box-shadow: 0 0 0 1px var(--lk-cyan-border);
 }
 .chord-toolbar-input::placeholder {
-  color: var(--lk-text-muted, #5C6A78);
+  color: var(--lk-text-muted);
   font-weight: 400;
 }
 
 .chord-toolbar-btn {
   padding: 7px 14px;
   border: none;
-  background: var(--lk-cyan, #7CD2FF);
-  color: var(--lk-ink, #0B0F14);
-  border-radius: 4px;
+  background: var(--lk-cyan);
+  color: var(--lk-ink);
+  border-radius: var(--lk-radius);
   cursor: pointer;
-  font: 600 12px "Manrope", sans-serif;
-  transition: background 0.18s ease-out;
+  font: 600 12px var(--lk-body);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--lk-dur-hover) var(--lk-ease);
 }
 .chord-toolbar-btn:hover {
-  background: var(--lk-cyan-hover, #a4e0ff);
+  background: var(--lk-cyan-hover);
+  transform: translateY(-1px);
+}
+
+.chord-strip-toggle {
+  padding: 6px 12px;
+  border: 1px solid var(--lk-line);
+  background: transparent;
+  color: var(--lk-text-secondary);
+  border-radius: var(--lk-radius);
+  cursor: pointer;
+  font: 500 11px var(--lk-mono);
+  letter-spacing: 0.04em;
+  transition: all var(--lk-dur-hover) var(--lk-ease);
+}
+.chord-strip-toggle:hover {
+  border-color: var(--lk-cyan);
+  color: var(--lk-cyan);
+}
+.chord-strip-toggle.active {
+  background: var(--lk-cyan-muted);
+  border-color: var(--lk-cyan);
+  color: var(--lk-cyan);
+}
+
+.transpose-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--lk-surface-1);
+  border: 1px solid var(--lk-line);
+  border-radius: var(--lk-radius);
+  padding: 2px 4px;
+}
+
+.transpose-btn {
+  padding: 3px 7px;
+  border: none;
+  background: transparent;
+  color: var(--lk-text-secondary);
+  border-radius: var(--lk-radius);
+  cursor: pointer;
+  font: 600 11px var(--lk-mono);
+  transition: all var(--lk-dur-hover) var(--lk-ease);
+}
+.transpose-btn:hover {
+  background: var(--lk-surface-2);
+  color: var(--lk-cyan);
+}
+
+.transpose-label {
+  font: 500 9.5px var(--lk-mono);
+  letter-spacing: 0.06em;
+  color: var(--lk-text-muted);
+  padding: 0 4px;
+}
+
+.section-insert-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.section-insert-btn {
+  padding: 5px 9px;
+  border: 1px solid var(--lk-line);
+  background: var(--lk-surface-1);
+  color: var(--lk-text-secondary);
+  border-radius: var(--lk-radius);
+  cursor: pointer;
+  font: 500 11px var(--lk-mono);
+  letter-spacing: 0.04em;
+  transition: all var(--lk-dur-hover) var(--lk-ease);
+}
+.section-insert-btn:hover {
+  border-color: var(--lk-cyan);
+  color: var(--lk-cyan);
+}
+.section-insert-btn.chorus:hover {
+  border-color: var(--lk-peach);
+  color: var(--lk-peach);
 }
 
 .chord-toolbar-hint {
-  font: 400 11px "Source Code Pro", monospace;
+  font: 400 11px var(--lk-mono);
   letter-spacing: 0.04em;
-  color: var(--lk-text-muted, #5C6A78);
+  color: var(--lk-text-muted);
+  margin-left: auto;
 }
 
 /* ─── Chord suggestions ─────────────────────────────────────────────────── */
@@ -63,18 +151,20 @@
   align-items: center;
   gap: 12px;
   padding: 8px 40px;
-  border-bottom: 1px solid var(--lk-line, #243140);
-  background: var(--lk-surface-1, #121922);
+  border-bottom: 1px solid var(--lk-line);
+  background: var(--lk-surface-1);
   flex-wrap: wrap;
+  flex: none;
 }
 
 .chord-suggestions-label {
-  font: 400 10.5px "Source Code Pro", monospace;
+  font: 400 10.5px var(--lk-mono);
   letter-spacing: 0.06em;
-  color: var(--lk-text-muted, #5C6A78);
+  color: var(--lk-text-muted);
 }
 .chord-suggestions-label strong {
-  color: var(--lk-text-secondary, #90A0B0);
+  color: var(--lk-text-secondary);
+  font-weight: 500;
 }
 
 .chord-suggestions-list {
@@ -87,38 +177,37 @@
   align-items: center;
   min-width: 42px;
   padding: 4px 7px;
-  border: 1px solid var(--lk-line, #243140);
-  border-radius: 4px;
+  border: 1px solid var(--lk-line);
+  border-radius: var(--lk-radius);
   background: transparent;
   cursor: pointer;
   line-height: 1.15;
-  transition: border-color 0.18s ease-out, background 0.18s ease-out;
+  transition: all var(--lk-dur-hover) var(--lk-ease);
 }
 .chord-chip:hover {
-  border-color: var(--lk-cyan, #7CD2FF);
-  background: rgba(124, 210, 255, 0.08);
+  border-color: var(--lk-cyan);
+  background: var(--lk-surface-2);
+  transform: translateY(-1px);
 }
 .chord-chip.tonic {
-  border-color: var(--lk-cyan, #7CD2FF);
-  background: rgba(124, 210, 255, 0.12);
+  border-color: var(--lk-cyan);
+  background: var(--lk-cyan-muted);
 }
 
 .chip-symbol {
-  font: 700 13px "Source Code Pro", monospace;
-  color: var(--lk-text, #EEF2F6);
+  font: 700 13px var(--lk-mono);
+  color: var(--lk-text);
 }
 .chord-chip.tonic .chip-symbol {
-  color: var(--lk-cyan, #7CD2FF);
+  color: var(--lk-cyan);
 }
 
 .chip-roman {
-  font: 400 9.5px "Source Code Pro", monospace;
-  color: var(--lk-text-muted, #5C6A78);
+  font: 400 9.5px var(--lk-mono);
+  color: var(--lk-text-muted);
 }
 
 /* ─── Editing surface ───────────────────────────────────────────────────── */
-/* EditorContent renders a wrapper <div> around the ProseMirror element; the
-   wrapper is the flex child that must own the bounded height + scroll. */
 .chord-editor-scroll {
   flex: 1;
   min-height: 0;
@@ -127,20 +216,43 @@
 
 .chord-editor-content {
   min-height: 100%;
-  padding: 20px 40px;
+  padding: 20px 40px 48px;
   outline: none;
-  font-family: "Source Code Pro", monospace;
+  font-family: var(--lk-mono);
   font-size: 16.5px;
-  color: var(--lk-text, #EEF2F6);
-  caret-color: var(--lk-cyan, #7CD2FF);
+  line-height: 3;
+  color: var(--lk-text);
+  caret-color: var(--lk-cyan);
 }
 
-/* The line box has to carry the lyric *and* the chord label floating above it,
-   so the leading is the chord row's headroom. Kept generous because a line
-   densely chorded by the agent needs the label to clear the ascenders below. */
 .chord-editor-content p {
-  margin: 0 0 0.45em;
-  line-height: 3.4;
+  margin: 0;
+  line-height: 3;
+}
+
+.chord-editor-content h1,
+.chord-editor-content h2,
+.chord-editor-content h3,
+.chord-editor-content h4 {
+  font: 500 11px var(--lk-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lk-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0 6px;
+  line-height: 1.4;
+}
+
+.chord-editor-content h1::after,
+.chord-editor-content h2::after,
+.chord-editor-content h3::after,
+.chord-editor-content h4::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--lk-line);
 }
 
 /* ─── The chord node ────────────────────────────────────────────────────── */
@@ -149,28 +261,226 @@
   display: inline-block;
   width: 0;
   vertical-align: baseline;
+  font-style: normal;
 }
 
 .chord .chord-label {
   position: absolute;
-  bottom: 1.4em;
+  bottom: 1.05em;
   left: 0;
   white-space: nowrap;
-  font: 600 12px "Source Code Pro", monospace;
-  color: var(--lk-cyan, #7CD2FF);
+  font: 600 12px var(--lk-mono);
+  color: var(--lk-cyan);
   user-select: none;
   pointer-events: none;
-  /* The anchor is zero-width, so two chords over adjacent syllables can still
-     overlap. A halo in the canvas colour keeps the front label legible when
-     they do, instead of letting the two smear together. */
   text-shadow:
-    0 0 4px var(--lk-ink, #0B0F14),
-    0 0 3px var(--lk-ink, #0B0F14),
-    0 0 2px var(--lk-ink, #0B0F14);
+    0 0 4px var(--lk-ink),
+    0 0 3px var(--lk-ink),
+    0 0 2px var(--lk-ink);
 }
 
 .chord.ProseMirror-selectednode .chord-label {
-  outline: 2px solid var(--lk-cyan, #7CD2FF);
+  outline: 2px solid var(--lk-cyan);
   outline-offset: 2px;
   border-radius: 3px;
+}
+
+/* ─── Inline Voicings Strip ────────────────────────────────────────────── */
+.inline-voicings-strip {
+  border-top: 1px solid var(--lk-line);
+  background: var(--lk-surface-1);
+  padding: 12px 28px;
+  flex: none;
+}
+
+.inline-strip-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 10px; flex-wrap: wrap;
+}
+
+.inline-strip-label {
+  font: 400 10.5px var(--lk-mono);
+  letter-spacing: 0.06em;
+  color: var(--lk-text-muted);
+}
+.active-chord-name {
+  color: var(--lk-peach);
+  font-weight: 700;
+}
+
+.instrument-toggle {
+  display: flex; padding: 2px;
+  background: var(--lk-surface-2);
+  border: 1px solid var(--lk-line);
+  border-radius: var(--lk-radius-pill);
+}
+
+.instrument-toggle .inst-btn {
+  border: none; cursor: pointer;
+  padding: 4px 11px; border-radius: var(--lk-radius-pill);
+  font: 500 10.5px var(--lk-mono);
+  letter-spacing: 0.06em;
+  background: transparent; color: var(--lk-text-muted);
+  transition: color var(--lk-dur-hover) var(--lk-ease), background var(--lk-dur-hover) var(--lk-ease);
+}
+.instrument-toggle .inst-btn:hover:not(.active) { color: var(--lk-text); }
+.instrument-toggle .inst-btn.active {
+  background: var(--lk-cyan);
+  color: var(--lk-ink);
+  font-weight: 600;
+  cursor: default;
+}
+
+.inline-strip-shortcut {
+  margin-left: auto;
+  font: 400 10.5px var(--lk-mono);
+  letter-spacing: 0.06em;
+  color: var(--lk-text-muted);
+}
+
+.inline-strip-cards {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.inline-guitar-row, .inline-piano-row {
+  display: flex; gap: 10px;
+}
+
+.inline-guitar-card {
+  border: 1px solid var(--lk-line);
+  border-radius: var(--lk-radius-card);
+  background: var(--lk-ink);
+  padding: 8px 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  flex: none; cursor: pointer;
+  transition: border-color var(--lk-dur-hover) var(--lk-ease), transform var(--lk-dur-hover) var(--lk-ease);
+}
+.inline-guitar-card:hover {
+  border-color: var(--lk-cyan);
+  transform: translateY(-2px);
+}
+
+.inline-chord-name {
+  font: 700 14px var(--lk-mono);
+  color: var(--lk-text);
+}
+
+.inline-guitar-markers {
+  display: grid; grid-template-columns: repeat(6, 13px); justify-items: center;
+}
+.inline-marker {
+  font: 400 8.5px var(--lk-mono);
+  color: var(--lk-text-muted);
+  line-height: 1;
+}
+
+.inline-guitar-fretboard {
+  border-top: 2px solid var(--lk-text-secondary);
+  background-image:
+    repeating-linear-gradient(to right, var(--lk-line) 0 1px, transparent 1px 13px),
+    repeating-linear-gradient(to bottom, transparent 0 12px, var(--lk-line) 12px 13px);
+  background-position: 6px 0, 0 0;
+  display: grid; grid-template-columns: repeat(6, 13px); grid-template-rows: repeat(4, 13px);
+}
+.inline-fret-cell {
+  display: grid; place-items: center;
+}
+.inline-fret-dot {
+  width: 9px; height: 9px; border-radius: 999px;
+  background: var(--lk-cyan); display: block;
+}
+
+.inline-piano-card {
+  border: 1px solid var(--lk-line);
+  border-radius: var(--lk-radius-card);
+  background: var(--lk-ink);
+  padding: 8px 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  flex: none; cursor: pointer;
+  transition: border-color var(--lk-dur-hover) var(--lk-ease), transform var(--lk-dur-hover) var(--lk-ease);
+}
+.inline-piano-card:hover {
+  border-color: var(--lk-cyan);
+  transform: translateY(-2px);
+}
+
+.inline-piano-keyboard {
+  display: flex; align-items: flex-start; gap: 1px;
+  padding-right: 5px;
+}
+.inline-piano-white-key {
+  position: relative; width: 17px; height: 46px;
+  background: #dfe6ed; border-radius: 0 0 3px 3px;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 4px;
+}
+.inline-piano-white-dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  background: var(--lk-cyan); display: block;
+}
+.inline-piano-black-key {
+  position: absolute; top: 0; right: -6px; z-index: 2;
+  width: 11px; height: 28px; background: #10161d;
+  border: 1px solid #060809; border-radius: 0 0 3px 3px;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 3px; box-sizing: border-box;
+}
+.inline-piano-black-dot {
+  width: 6px; height: 6px; border-radius: 999px;
+  background: var(--lk-peach); display: block;
+}
+.inline-chord-notes {
+  font: 400 9px var(--lk-mono);
+  letter-spacing: 0.04em;
+  color: var(--lk-text-muted);
+}
+
+/* ─── Status Bar ────────────────────────────────────────────────────────── */
+.chord-editor-statusbar {
+  height: 36px;
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 40px;
+  border-top: 1px solid var(--lk-line);
+  font: 400 11px var(--lk-mono);
+  letter-spacing: 0.04em;
+  color: var(--lk-text-muted);
+  background: var(--lk-ink);
+}
+
+.status-syllables {
+  color: var(--lk-text-muted);
+  white-space: nowrap;
+}
+
+.status-rhymes {
+  color: var(--lk-text-muted);
+  white-space: nowrap;
+}
+.status-rhymes strong {
+  color: var(--lk-text-secondary);
+  font-weight: 500;
+}
+.status-rhyme-btn {
+  border: none;
+  background: transparent;
+  padding: 0 3px;
+  color: var(--lk-text-secondary);
+  font: 500 11px var(--lk-mono);
+  cursor: pointer;
+  transition: color var(--lk-dur-hover) var(--lk-ease);
+}
+.status-rhyme-btn:hover {
+  color: var(--lk-cyan);
+  text-decoration: underline;
+}
+
+.status-shortcuts {
+  margin-left: auto;
+  color: var(--lk-text-muted);
+  white-space: nowrap;
 }

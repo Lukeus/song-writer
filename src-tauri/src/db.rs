@@ -59,6 +59,8 @@ pub struct MediaFile {
     pub lyrics_language: Option<String>,
     pub transcription_error: Option<String>,
     pub transcribed_at: Option<String>,
+    /// JSON array of compact 12-bit chroma hash integers for acoustic matching.
+    pub fingerprint_json: Option<String>,
 }
 
 /// Successful analyzer output, persisted onto a [`MediaFile`].
@@ -69,6 +71,8 @@ pub struct AnalysisResult {
     pub duration_secs: Option<f64>,
     /// Raw JSON for the chord timeline (stored verbatim).
     pub chords_json: Option<String>,
+    /// Raw JSON for acoustic chroma fingerprint (stored verbatim).
+    pub fingerprint_json: Option<String>,
 }
 
 /// Successful transcription output, persisted onto a [`MediaFile`].
@@ -91,6 +95,14 @@ pub struct LogicProjectRow {
     pub created_at: Option<String>,
     pub modified_at: Option<String>,
     pub last_scanned_at: String,
+}
+
+/// A global directory scanned for Logic Pro audio bounces outside of `.logicx` bundles.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BounceFolder {
+    pub id: i64,
+    pub path: String,
+    pub created_at: String,
 }
 
 /// Open (or create) the database at `path` and run migrations.
@@ -157,6 +169,7 @@ fn migrate(conn: &Connection) -> Result<(), String> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_song_media_song ON song_media(song_id);
+        CREATE INDEX IF NOT EXISTS idx_song_media_media ON song_media(media_file_id);
 
         -- A configured language-model endpoint. `kind` selects the Rust impl
         -- (`ai::build_provider`); everything else is per-instance config.
@@ -200,6 +213,12 @@ fn migrate(conn: &Connection) -> Result<(), String> {
 
         CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation
             ON ai_messages(conversation_id);
+
+        CREATE TABLE IF NOT EXISTS global_bounce_folders (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            path       TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL
+        );
         "#,
     )
     .map_err(|e| e.to_string())?;
@@ -223,6 +242,7 @@ fn ensure_media_columns(conn: &Connection) -> Result<(), String> {
         ("lyrics_language", "TEXT"),
         ("transcription_error", "TEXT"),
         ("transcribed_at", "TEXT"),
+        ("fingerprint_json", "TEXT"),
     ];
     for (name, ty) in columns {
         let sql = format!("ALTER TABLE media_files ADD COLUMN {name} {ty}");
@@ -329,7 +349,7 @@ fn row_to_song(row: &rusqlite::Row) -> rusqlite::Result<Song> {
 const MEDIA_COLS: &str = "id, path, name, format, size_bytes, imported_at,
     analysis_status, bpm, musical_key, duration_secs, chords_json,
     analyzer_error, analyzed_at, transcription_status, lyrics, lyrics_json,
-    lyrics_language, transcription_error, transcribed_at";
+    lyrics_language, transcription_error, transcribed_at, fingerprint_json";
 
 /// Register a media file by path, or return the existing row if already known.
 ///
@@ -435,13 +455,14 @@ pub fn save_analysis(
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
         "UPDATE media_files SET
-             analysis_status = 'done',
-             bpm             = ?2,
-             musical_key     = ?3,
-             duration_secs   = ?4,
-             chords_json     = ?5,
-             analyzer_error  = NULL,
-             analyzed_at     = ?6
+             analysis_status   = 'done',
+             bpm               = ?2,
+             musical_key       = ?3,
+             duration_secs     = ?4,
+             chords_json       = ?5,
+             fingerprint_json  = ?6,
+             analyzer_error    = NULL,
+             analyzed_at       = ?7
          WHERE id = ?1",
         params![
             media_file_id,
@@ -449,6 +470,7 @@ pub fn save_analysis(
             result.key,
             result.duration_secs,
             result.chords_json,
+            result.fingerprint_json,
             now
         ],
     )
@@ -528,7 +550,19 @@ fn row_to_media(row: &rusqlite::Row) -> rusqlite::Result<MediaFile> {
         lyrics_language: row.get(16)?,
         transcription_error: row.get(17)?,
         transcribed_at: row.get(18)?,
+        fingerprint_json: row.get(19)?,
     })
+}
+
+/// All media files in the database.
+pub fn list_all_media_files(conn: &Connection) -> Result<Vec<MediaFile>, String> {
+    let mut stmt = conn
+        .prepare(&format!("SELECT {MEDIA_COLS} FROM media_files ORDER BY imported_at DESC"))
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], row_to_media)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -914,3 +948,59 @@ fn row_to_ai_message(row: &rusqlite::Row) -> rusqlite::Result<AiMessage> {
         created_at: row.get(6)?,
     })
 }
+
+// ---------------------------------------------------------------------------
+// Global Bounce Folders
+// ---------------------------------------------------------------------------
+
+pub fn add_global_bounce_folder(conn: &Connection, path: &str) -> Result<BounceFolder, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO global_bounce_folders (path, created_at) VALUES (?1, ?2)
+         ON CONFLICT(path) DO UPDATE SET created_at = excluded.created_at",
+        params![path, now],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.query_row(
+        "SELECT id, path, created_at FROM global_bounce_folders WHERE path = ?1",
+        params![path],
+        row_to_bounce_folder,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[allow(dead_code)]
+pub fn get_global_bounce_folder(conn: &Connection, id: i64) -> Result<BounceFolder, String> {
+    conn.query_row(
+        "SELECT id, path, created_at FROM global_bounce_folders WHERE id = ?1",
+        params![id],
+        row_to_bounce_folder,
+    )
+    .map_err(|e| e.to_string())
+}
+
+pub fn list_global_bounce_folders(conn: &Connection) -> Result<Vec<BounceFolder>, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, path, created_at FROM global_bounce_folders ORDER BY created_at ASC")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], row_to_bounce_folder)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+pub fn delete_global_bounce_folder(conn: &Connection, id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM global_bounce_folders WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn row_to_bounce_folder(row: &rusqlite::Row) -> rusqlite::Result<BounceFolder> {
+    Ok(BounceFolder {
+        id: row.get(0)?,
+        path: row.get(1)?,
+        created_at: row.get(2)?,
+    })
+}
+

@@ -13,6 +13,7 @@ function LogicUtility(ctx: UtilityContext) {
   return (
     <LogicProjectsPanel
       linkedProjectId={ctx.activeSong?.logic_project_id ?? null}
+      activeSongId={ctx.activeSongId}
       onLink={onLink}
       songOpen={ctx.activeSong != null}
     />
@@ -21,6 +22,6 @@ function LogicUtility(ctx: UtilityContext) {
 
 export const logicProjectsUtility: Utility = {
   id: "logic-projects",
-  title: "Logic Projects",
+  title: "Logic",
   render: (ctx) => <LogicUtility {...ctx} />,
 };

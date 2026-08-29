@@ -28,6 +28,7 @@ downloads its model on first use).
 from __future__ import annotations
 
 import json
+import multiprocessing
 import os
 import sys
 import tempfile
@@ -165,4 +166,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()

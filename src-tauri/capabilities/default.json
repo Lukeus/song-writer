@@ -13,6 +13,7 @@
       "identifier": "shell:allow-execute",
       "allow": [
         { "name": "binaries/analyzer", "sidecar": true, "args": true },
+        { "name": "binaries/transcriber", "sidecar": true, "args": true },
         { "name": "python3", "cmd": "python3", "args": true },
         { "name": "ffmpeg", "cmd": "ffmpeg", "args": true }
       ]

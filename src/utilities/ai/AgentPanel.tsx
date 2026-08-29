@@ -49,6 +49,30 @@ function pickModel(models: AiModelInfo[], remembered: string | null): string | n
  */
 const CHORD_MARKUP = /\[[A-G][#b♯♭]?[^\]\n]{0,10}\]\S/;
 
+interface PromptPreset {
+  label: string;
+  prompt: string;
+}
+
+const SONGWRITING_PRESETS: PromptPreset[] = [
+  {
+    label: "bridge",
+    prompt: "Suggest a contrasting Bridge section for this song with lyrics and chord progression that builds tension.",
+  },
+  {
+    label: "rhymes",
+    prompt: "Provide creative AABB and ABAB rhyming couplets and imagery fitting the mood of this draft.",
+  },
+  {
+    label: "reharmonize",
+    prompt: "Suggest alternative jazz/indie chords and substitutions to reharmonize this chord progression.",
+  },
+  {
+    label: "polish",
+    prompt: "Critique the meter, rhythm, and lyrical impact of this draft, and suggest sharper imagery.",
+  },
+];
+
 /** AI Agent utility: chat with a local model about the open song. */
 export function AgentPanel({
   activeSongId,
@@ -74,6 +98,7 @@ export function AgentPanel({
   const [showContext, setShowContext] = useState(false);
   /** Proposed song rewrites, keyed by the message that carried them. */
   const [edits, setEdits] = useState<Record<number, ProposedEdit>>({});
+  const [appliedEdits, setAppliedEdits] = useState<Record<number, boolean>>({});
   const [autoApply, setAutoApply] = useState(
     () => localStorage.getItem("sw.ai.autoApply") === "1",
   );
@@ -179,6 +204,7 @@ export function AgentPanel({
     if (conversationId == null) {
       setMessages([]);
       setEdits({});
+      setAppliedEdits({});
       return;
     }
     let cancelled = false;
@@ -203,6 +229,7 @@ export function AgentPanel({
   const newChat = () => {
     setConversationId(null);
     setMessages([]);
+    setAppliedEdits({});
     setError(null);
   };
 
@@ -290,7 +317,10 @@ export function AgentPanel({
       // that; otherwise it waits behind the Apply button on the edit card.
       if (autoApply) {
         const latest = [...rows].reverse().find((m) => found[m.id]);
-        if (latest) replaceBlocks(found[latest.id].blocks);
+        if (latest) {
+          replaceBlocks(found[latest.id].blocks);
+          setAppliedEdits((prev) => ({ ...prev, [latest.id]: true }));
+        }
       }
     } catch (e) {
       setError(String(e));
@@ -337,7 +367,10 @@ export function AgentPanel({
    * with a dialog: the proposal is already shown in full above the button, and
    * ⌘Z in the editor undoes it.
    */
-  const applyEdit = (edit: ProposedEdit) => replaceBlocks(edit.blocks);
+  const applyEdit = (messageId: number, edit: ProposedEdit) => {
+    replaceBlocks(edit.blocks);
+    setAppliedEdits((prev) => ({ ...prev, [messageId]: true }));
+  };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -349,7 +382,7 @@ export function AgentPanel({
   return (
     <div className="agent-panel">
       <div className="agent-header">
-        <h2>AI Agent</h2>
+        <h2>AI AGENT</h2>
         <div className="agent-header-actions">
           <select
             className="agent-model"
@@ -367,7 +400,7 @@ export function AgentPanel({
             ))}
           </select>
           <button onClick={newChat} disabled={!songOpen} title="Start a new thread">
-            New chat
+            new chat
           </button>
         </div>
       </div>
@@ -446,22 +479,28 @@ export function AgentPanel({
                 {edits[m.id] && (
                   <div className="agent-edit">
                     <div className="agent-edit-header">
-                      Proposed song — {edits[m.id].blocks.length} lines
+                      {appliedEdits[m.id]
+                        ? `Applied to song — ${edits[m.id].blocks.length} lines`
+                        : `Proposed song — ${edits[m.id].blocks.length} lines`}
                     </div>
                     <pre className="agent-edit-body">{edits[m.id].lyrics}</pre>
                     <div className="agent-edit-actions">
                       <button
-                        className="primary"
-                        onClick={() => applyEdit(edits[m.id])}
-                        title="Replace the song's lyrics with this version"
+                        className={appliedEdits[m.id] ? "" : "primary"}
+                        onClick={() => applyEdit(m.id, edits[m.id])}
+                        title={
+                          appliedEdits[m.id]
+                            ? "Re-apply this version to the song editor"
+                            : "Replace the song's lyrics with this version"
+                        }
                       >
-                        Apply to song
+                        {appliedEdits[m.id] ? "applied" : "apply to song"}
                       </button>
                       <button
                         onClick={() => insertBlocks(edits[m.id].blocks)}
                         title="Add this to the end of the song instead of replacing it"
                       >
-                        Append instead
+                        append instead
                       </button>
                     </div>
                   </div>
@@ -473,13 +512,13 @@ export function AgentPanel({
                       onClick={() => navigator.clipboard.writeText(m.content)}
                       title="Copy to clipboard"
                     >
-                      Copy
+                      copy
                     </button>
                     <button
                       onClick={() => append(m.content)}
                       title="Append to the song, placing any chords above their syllables"
                     >
-                      {CHORD_MARKUP.test(m.content) ? "Append with chords" : "Append to song"}
+                      {CHORD_MARKUP.test(m.content) ? "append with chords" : "append to song"}
                     </button>
                   </div>
                 )}
@@ -500,53 +539,87 @@ export function AgentPanel({
           </div>
 
           <div className="agent-composer">
-            <textarea
-              className="agent-input"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder={
-                model ? "Ask the agent…  (Enter to send, Shift+Enter for a new line)" : "No model available"
-              }
-              rows={3}
-              disabled={!model}
-            />
-            <div className="agent-composer-actions">
-              <label
-                className="agent-think-toggle"
-                title="Put proposed rewrites straight into the song instead of waiting for Apply. ⌘Z undoes."
-              >
-                <input
-                  type="checkbox"
-                  checked={autoApply}
-                  onChange={(e) => setAutoApply(e.target.checked)}
-                  disabled={busy}
-                />
-                Auto-apply
-              </label>
-              {canThink && (
-                <label
-                  className="agent-think-toggle"
-                  title="Let the model reason before answering — slower, usually better structure"
-                >
-                  <input
-                    type="checkbox"
-                    checked={think}
-                    onChange={(e) => setThink(e.target.checked)}
-                    disabled={busy}
-                  />
-                  Reasoning
-                </label>
-              )}
-              {busy ? (
-                <button onClick={stop} disabled={streaming?.runId == null}>
-                  Stop
-                </button>
-              ) : (
-                <button onClick={send} disabled={!input.trim() || !model}>
-                  Send
-                </button>
-              )}
+            <div className="agent-presets-bar">
+              <span className="agent-presets-label">QUICK ACTIONS</span>
+              <div className="agent-presets-list">
+                {SONGWRITING_PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    className="agent-preset-chip"
+                    onClick={() => {
+                      if (busy) return;
+                      setInput(p.prompt);
+                    }}
+                    title={p.prompt}
+                    disabled={busy || !model}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="agent-composer-box">
+              <textarea
+                className="agent-input"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={
+                  model
+                    ? "ask about this song, lyrics, or chords…  (enter to send)"
+                    : "no model available"
+                }
+                rows={2}
+                disabled={!model}
+              />
+              <div className="agent-composer-bar">
+                <div className="agent-composer-toggles">
+                  <label
+                    className="agent-think-toggle"
+                    title="Put proposed rewrites straight into the song instead of waiting for Apply. ⌘Z undoes."
+                  >
+                    <input
+                      type="checkbox"
+                      checked={autoApply}
+                      onChange={(e) => setAutoApply(e.target.checked)}
+                      disabled={busy}
+                    />
+                    auto-apply
+                  </label>
+                  {canThink && (
+                    <label
+                      className="agent-think-toggle"
+                      title="Let the model reason before answering — slower, usually better structure"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={think}
+                        onChange={(e) => setThink(e.target.checked)}
+                        disabled={busy}
+                      />
+                      reasoning
+                    </label>
+                  )}
+                </div>
+                <div className="agent-composer-submit">
+                  {selected && (
+                    <span className="agent-composer-model-pill" title={`Active model: ${selected.name}`}>
+                      {selected.name.split(":")[0]}
+                    </span>
+                  )}
+                  {busy ? (
+                    <button className="agent-stop-btn" onClick={stop} disabled={streaming?.runId == null} title="Stop generation">
+                      stop
+                    </button>
+                  ) : (
+                    <button className="agent-send-btn" onClick={send} disabled={!input.trim() || !model} title="Send message">
+                      send ↵
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </>
